@@ -40,13 +40,13 @@ export const FloatingCard = memo(
         }}
         className={`
         cursor-grab
-        w-[75vw] md:w-96 p-4 md:p-6 rounded-2xl shadow-xl border-l-[8px] md:border-l-[10px] border-indigo-500 bg-white/95 backdrop-blur-sm
-        text-base md:text-2xl font-bold leading-snug text-slate-800
+        w-[70vw] md:w-96 p-3 md:p-6 rounded-2xl shadow-xl border-l-[6px] md:border-l-[10px] border-indigo-500 bg-white/95 backdrop-blur-sm
+        text-sm md:text-2xl font-bold leading-tight md:leading-snug text-slate-800
         select-none transition-shadow duration-200
         ${item.isDragging ? "ring-4 ring-indigo-400/30" : ""}
       `}
       >
-        <div className="absolute top-1 right-3 text-[8px] md:text-[10px] uppercase tracking-widest text-slate-300 font-black">
+        <div className="absolute top-1 right-3 text-[7px] md:text-[10px] uppercase tracking-widest text-slate-300 font-black">
           LITERARY FLOW
         </div>
         {item.text}

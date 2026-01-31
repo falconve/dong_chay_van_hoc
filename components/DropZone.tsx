@@ -43,24 +43,24 @@ export const DropZone = forwardRef<HTMLDivElement, DropZoneProps>(
       `}
       >
         <div
-          className={`p-2 md:p-4 rounded-xl shadow-sm mb-1 md:mb-3 transition-transform duration-300 ${highlight ? "scale-110 bg-white" : "bg-white/50"}`}
+          className={`p-1.5 md:p-4 rounded-xl shadow-sm mb-1 md:mb-3 transition-transform duration-300 ${highlight ? "scale-110 bg-white" : "bg-white/50"}`}
         >
           <Icon
-            className={`w-6 h-6 md:w-10 md:h-10 ${highlight ? "animate-bounce" : ""}`}
+            className={`w-5 h-5 md:w-10 md:h-10 ${highlight ? "animate-bounce" : ""}`}
           />
         </div>
-        <h3 className="text-xs md:text-2xl font-black uppercase tracking-tighter md:tracking-widest text-center px-1">
+        <h3 className="text-[10px] md:text-2xl font-black uppercase tracking-tighter md:tracking-widest text-center px-1 leading-tight">
           {category}
         </h3>
 
         <div
-          className={`mt-1 text-[8px] md:text-xs font-bold uppercase tracking-tighter opacity-40 transition-opacity ${highlight ? "opacity-100" : "hidden md:block"}`}
+          className={`mt-1 text-[7px] md:text-xs font-bold uppercase tracking-tighter opacity-40 transition-opacity ${highlight ? "opacity-100" : "hidden md:block"}`}
         >
           Thả tại đây
         </div>
 
-        <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-current opacity-20" />
-        <div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-current opacity-20" />
+        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-current opacity-20" />
+        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-current opacity-20" />
       </div>
     );
   },

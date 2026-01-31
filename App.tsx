@@ -16,9 +16,12 @@ import { DropZone } from "./components/DropZone";
 import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
-const SPAWN_INTERVAL_MS = 5000;
+// --- ĐIỀU CHỈNH TỐC ĐỘ TẠI ĐÂY ---
+const SPAWN_INTERVAL_MS = 6500; // Tăng lên 6.5 giây để thẻ thưa hơn
+const MOVEMENT_SPEED = 0.22; // Giảm từ 0.38 xuống 0.22 để trôi chậm và mượt hơn
+// --------------------------------
+
 const GAME_DURATION_SEC = 180;
-const MOVEMENT_SPEED = 0.38;
 
 interface FeedbackItem {
   id: string;
@@ -83,8 +86,8 @@ export default function App() {
     const newItem: ActiveItem = {
       ...template,
       id: Math.random().toString(36).substr(2, 9),
-      x: -30,
-      y: 15 + Math.random() * 40,
+      x: -35, // Xuất hiện sâu hơn từ bên trái để người chơi kịp chuẩn bị
+      y: 20 + Math.random() * 35, // Giới hạn vùng bay ở giữa màn hình hơn
       speed: MOVEMENT_SPEED,
       isDragging: false,
     };
@@ -165,8 +168,7 @@ export default function App() {
     for (const zone of zones) {
       if (zone.ref.current) {
         const rect = zone.ref.current.getBoundingClientRect();
-        // Give a bit of buffer for mobile touch
-        const buffer = 15;
+        const buffer = 20; // Buffer lớn hơn cho cảm ứng mobile
         if (
           point.x >= rect.left - buffer &&
           point.x <= rect.right + buffer &&
@@ -240,13 +242,11 @@ export default function App() {
 
   return (
     <div className="relative w-full h-screen bg-[#f8fafc] overflow-hidden select-none touch-none font-sans">
-      {/* Background decoration */}
       <div className="absolute inset-0 opacity-40">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200 rounded-full blur-[100px] animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-pink-200 rounded-full blur-[100px] animate-pulse delay-700" />
       </div>
 
-      {/* HUD - Compact on mobile */}
       <div className="absolute top-3 md:top-6 left-3 md:left-6 right-3 md:right-6 z-40 flex justify-between items-center pointer-events-none">
         <div className="flex gap-2 md:gap-4">
           <div className="bg-white/70 backdrop-blur-lg border border-white/40 px-3 py-1.5 md:px-6 md:py-3 rounded-xl shadow-lg flex items-center gap-2 md:gap-4">
@@ -296,7 +296,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Cards Canvas */}
       <div className="absolute inset-0 z-10">
         <AnimatePresence>
           {items.map((item) => (
@@ -311,7 +310,6 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-      {/* Feedback Popups */}
       <AnimatePresence>
         {feedbacks.map((fb) => (
           <Feedback
@@ -326,23 +324,22 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      {/* Bottom Drop Zones - Fixed Height for Mobile */}
-      <div className="absolute bottom-0 left-0 right-0 h-[22%] md:h-[32%] z-20 p-2 md:p-8 flex gap-2 md:gap-8 items-stretch justify-center bg-gradient-to-t from-white via-white/90 to-transparent">
-        <div className="flex-1 max-w-[120px] md:max-w-sm">
+      <div className="absolute bottom-0 left-0 right-0 h-[24%] md:h-[32%] z-20 p-3 md:p-8 flex gap-3 md:gap-8 items-stretch justify-center bg-gradient-to-t from-white via-white/90 to-transparent">
+        <div className="flex-1 max-w-[110px] md:max-w-sm">
           <DropZone
             ref={contentRef}
             category={Category.CONTENT}
             highlight={activeZone === Category.CONTENT}
           />
         </div>
-        <div className="flex-1 max-w-[120px] md:max-w-sm">
+        <div className="flex-1 max-w-[110px] md:max-w-sm">
           <DropZone
             ref={artRef}
             category={Category.ART}
             highlight={activeZone === Category.ART}
           />
         </div>
-        <div className="flex-1 max-w-[120px] md:max-w-sm">
+        <div className="flex-1 max-w-[110px] md:max-w-sm">
           <DropZone
             ref={lessonRef}
             category={Category.LESSON}
@@ -351,7 +348,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Overlays */}
       <AnimatePresence>
         {gameState === "MENU" && (
           <motion.div
