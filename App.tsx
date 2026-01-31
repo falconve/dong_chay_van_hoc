@@ -18,7 +18,7 @@ import { Feedback } from "./components/Feedback";
 
 // --- ĐIỀU CHỈNH TỐC ĐỘ TẠI ĐÂY ---
 const SPAWN_INTERVAL_MS = 6500; // Tăng lên 6.5 giây để thẻ thưa hơn
-const MOVEMENT_SPEED = 0.22; // Giảm từ 0.38 xuống 0.22 để trôi chậm và mượt hơn
+const MOVEMENT_SPEED = 0.1; // Giảm từ 0.38 xuống 0.22 để trôi chậm và mượt hơn
 // --------------------------------
 
 const GAME_DURATION_SEC = 180;
