@@ -1,7 +1,7 @@
-import React from 'react';
+
+import React, { memo } from 'react';
 import { motion, PanInfo } from 'framer-motion';
 import { ActiveItem } from '../types';
-import { CATEGORY_COLORS } from '../constants';
 
 interface FloatingCardProps {
   item: ActiveItem;
@@ -10,20 +10,27 @@ interface FloatingCardProps {
   onDragEnd: (id: string, info: PanInfo) => void;
 }
 
-export const FloatingCard: React.FC<FloatingCardProps> = ({ item, onDragStart, onDrag, onDragEnd }) => {
+export const FloatingCard = memo(({ item, onDragStart, onDrag, onDragEnd }: FloatingCardProps) => {
   return (
     <motion.div
       drag
       dragSnapToOrigin={true} 
-      dragElastic={0.2}
-      whileDrag={{ scale: 1.05, cursor: 'grabbing', zIndex: 100 }}
+      dragElastic={0.15}
+      whileDrag={{ 
+        scale: 1.08, 
+        rotate: [0, -1, 1, 0],
+        cursor: 'grabbing', 
+        zIndex: 100,
+        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+      }}
       onDragStart={() => onDragStart(item.id)}
       onDrag={(_, info) => onDrag(info.point)}
       onDragEnd={(_, info) => onDragEnd(item.id, info)}
-      initial={{ scale: 0, opacity: 0 }}
+      initial={{ scale: 0.8, opacity: 0, y: 20 }}
       animate={{ 
         scale: 1, 
         opacity: 1,
+        y: 0
       }}
       style={{
         position: 'absolute',
@@ -34,14 +41,16 @@ export const FloatingCard: React.FC<FloatingCardProps> = ({ item, onDragStart, o
       }}
       className={`
         cursor-grab
-        w-80 p-5 rounded-xl shadow-lg border-l-8 bg-white
-        text-3xl font-bold leading-snug
-        select-none
-        transition-shadow
-        ${item.isDragging ? 'shadow-2xl ring-4 ring-blue-400' : 'shadow-lg'}
+        w-72 md:w-96 p-5 md:p-6 rounded-2xl shadow-xl border-l-[10px] border-indigo-500 bg-white/95 backdrop-blur-sm
+        text-xl md:text-2xl font-bold leading-snug text-slate-800
+        select-none transition-shadow duration-200
+        ${item.isDragging ? 'ring-4 ring-indigo-400/30' : ''}
       `}
     >
+      <div className="absolute top-2 right-4 text-[10px] uppercase tracking-widest text-slate-300 font-black">LITERARY FLOW</div>
       {item.text}
     </motion.div>
   );
-};
+});
+
+FloatingCard.displayName = 'FloatingCard';
