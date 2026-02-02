@@ -13,54 +13,79 @@ const ICONS = {
   [Category.LESSON]: Lightbulb,
 };
 
-const COLORS = {
-  [Category.CONTENT]:
-    "from-blue-400/20 to-indigo-500/20 text-indigo-700 border-indigo-200",
-  [Category.ART]:
-    "from-purple-400/20 to-pink-500/20 text-purple-700 border-purple-200",
-  [Category.LESSON]:
-    "from-amber-400/20 to-orange-500/20 text-amber-700 border-amber-200",
-};
-
-const GLOWS = {
-  [Category.CONTENT]:
-    "shadow-[0_0_30px_rgba(99,102,241,0.4)] border-indigo-400",
-  [Category.ART]: "shadow-[0_0_30px_rgba(168,85,247,0.4)] border-purple-400",
-  [Category.LESSON]: "shadow-[0_0_30px_rgba(245,158,11,0.4)] border-amber-400",
+const THEMES = {
+  [Category.CONTENT]: {
+    bg: "from-blue-600/10 to-indigo-600/20",
+    border: "border-blue-400/50",
+    active:
+      "bg-blue-500/30 border-blue-400 shadow-[0_0_40px_rgba(59,130,246,0.5)]",
+    text: "text-blue-700",
+    iconBg: "bg-blue-100 text-blue-600",
+  },
+  [Category.ART]: {
+    bg: "from-purple-600/10 to-pink-600/20",
+    border: "border-purple-400/50",
+    active:
+      "bg-purple-500/30 border-purple-400 shadow-[0_0_40px_rgba(168,85,247,0.5)]",
+    text: "text-purple-700",
+    iconBg: "bg-purple-100 text-purple-600",
+  },
+  [Category.LESSON]: {
+    bg: "from-amber-600/10 to-orange-600/20",
+    border: "border-amber-400/50",
+    active:
+      "bg-amber-500/30 border-amber-400 shadow-[0_0_40px_rgba(245,158,11,0.5)]",
+    text: "text-amber-700",
+    iconBg: "bg-amber-100 text-amber-600",
+  },
 };
 
 export const DropZone = forwardRef<HTMLDivElement, DropZoneProps>(
   ({ category, highlight }, ref) => {
     const Icon = ICONS[category];
+    const theme = THEMES[category];
 
     return (
       <div
         ref={ref}
         className={`
-        relative h-full w-full rounded-2xl md:rounded-3xl border-2 md:border-4 transition-all duration-300 flex flex-col items-center justify-center
-        bg-gradient-to-br ${COLORS[category]} backdrop-blur-md overflow-hidden
-        ${highlight ? `${GLOWS[category]} scale-[1.03] bg-white` : "border-dashed opacity-90"}
+        relative h-full w-full rounded-[2rem] border-4 transition-all duration-500 flex flex-col items-center justify-center
+        bg-gradient-to-br backdrop-blur-xl overflow-hidden
+        ${highlight ? theme.active + " scale-105" : theme.bg + " " + theme.border + " border-dashed"}
       `}
       >
+        {/* Hiệu ứng sóng chảy phía sau */}
+        {highlight && (
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute inset-0 bg-white/20 animate-pulse" />
+            <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-white/20 to-transparent animate-bounce" />
+          </div>
+        )}
+
         <div
-          className={`p-1.5 md:p-4 rounded-xl shadow-sm mb-1 md:mb-3 transition-transform duration-300 ${highlight ? "scale-110 bg-white" : "bg-white/50"}`}
+          className={`p-4 md:p-6 rounded-2xl shadow-sm mb-2 transition-transform duration-300 ${highlight ? "scale-110 " + theme.iconBg : "bg-white/50 text-slate-600"}`}
         >
           <Icon
-            className={`w-5 h-5 md:w-10 md:h-10 ${highlight ? "animate-bounce" : ""}`}
+            size={highlight ? 48 : 32}
+            className={highlight ? "animate-spin-slow" : ""}
           />
         </div>
-        <h3 className="text-[10px] md:text-2xl font-black uppercase tracking-tighter md:tracking-widest text-center px-1 leading-tight">
+
+        <h3
+          className={`text-sm md:text-3xl font-black uppercase tracking-tighter md:tracking-widest text-center px-4 leading-none ${highlight ? "text-white" : theme.text}`}
+        >
           {category}
         </h3>
 
-        <div
-          className={`mt-1 text-[7px] md:text-xs font-bold uppercase tracking-tighter opacity-40 transition-opacity ${highlight ? "opacity-100" : "hidden md:block"}`}
+        <p
+          className={`mt-2 text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-60 ${highlight ? "text-white" : "text-slate-400"}`}
         >
-          Thả tại đây
-        </div>
+          {highlight ? "Thả ngay!" : "Phân loại vào đây"}
+        </p>
 
-        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-current opacity-20" />
-        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-current opacity-20" />
+        {/* Trang trí góc */}
+        <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-current opacity-20" />
+        <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-current opacity-20" />
       </div>
     );
   },

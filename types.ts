@@ -11,8 +11,8 @@ export interface GameItemData {
 }
 
 export interface ActiveItem extends GameItemData {
-  x: number; // Percentage across screen (0 to 100+)
-  y: number; // Random vertical offset percentage
+  x: number;
+  y: number;
   speed: number;
   isDragging: boolean;
 }
