@@ -343,6 +343,16 @@ export default function App() {
     setGameData((prev) => prev.filter((q) => q.id !== id));
   };
 
+  const deleteAllQuestions = () => {
+    if (
+      confirm(
+        "Bạn có chắc chắn muốn XÓA TẤT CẢ câu hỏi không? Thao tác này không thể hoàn tác trừ khi bạn Khôi phục mặc định.",
+      )
+    ) {
+      setGameData([]);
+    }
+  };
+
   const resetToDefault = () => {
     if (confirm("Bạn có chắc muốn khôi phục dữ liệu mặc định?")) {
       setGameData(DEFAULT_GAME_DATA);
@@ -452,12 +462,20 @@ export default function App() {
                   <h3 className="font-bold text-slate-700 text-lg">
                     Danh sách câu hỏi ({gameData.length})
                   </h3>
-                  <button
-                    onClick={resetToDefault}
-                    className="text-rose-500 text-sm font-bold flex items-center gap-1 hover:underline"
-                  >
-                    <RefreshCw size={14} /> Khôi phục mặc định
-                  </button>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={deleteAllQuestions}
+                      className="text-rose-600 text-sm font-bold flex items-center gap-1 hover:underline"
+                    >
+                      <Trash2 size={14} /> Xoá tất cả
+                    </button>
+                    <button
+                      onClick={resetToDefault}
+                      className="text-slate-500 text-sm font-bold flex items-center gap-1 hover:underline"
+                    >
+                      <RefreshCw size={14} /> Khôi phục mặc định
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
                   {gameData.map((q) => (
@@ -489,6 +507,11 @@ export default function App() {
                       </button>
                     </div>
                   ))}
+                  {gameData.length === 0 && (
+                    <div className="py-12 text-center text-slate-400 font-medium italic border-2 border-dashed border-slate-100 rounded-2xl">
+                      Danh sách trống. Hãy thêm câu hỏi mới ở trên!
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
