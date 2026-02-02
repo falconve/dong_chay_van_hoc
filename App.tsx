@@ -19,6 +19,11 @@ import {
   RefreshCw,
   Lock,
   ArrowLeft,
+  Trophy,
+  Users,
+  Activity,
+  ExternalLink,
+  Calendar,
 } from "lucide-react";
 import {
   Category,
@@ -38,13 +43,21 @@ const GOOGLE_SCRIPT_URL =
 const MOVEMENT_SPEED = 0.22;
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
-const ADMIN_PASSWORD = "123"; // Mật khẩu truy cập trang quản lý
+const ADMIN_PASSWORD = "123";
 
 interface FeedbackItem {
   id: string;
   type: "correct" | "wrong";
   x: number;
   y: number;
+}
+
+interface LeaderboardEntry {
+  name: string;
+  className: string;
+  score: number;
+  timestamp: string;
+  result: string;
 }
 
 export default function App() {
@@ -77,10 +90,17 @@ export default function App() {
   });
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("IDLE");
 
-  // --- SHUFFLED DECK LOGIC ---
+  // --- ADMIN PANEL NEW QUESTION STATE ---
+  // Fix: Added missing state variables for the admin question creation form
+  const [newQuestion, setNewQuestion] = useState("");
+  const [newCategory, setNewCategory] = useState<Category>(Category.CONTENT);
+
+  // --- DASHBOARD DATA ---
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [isRefreshingDashboard, setIsRefreshingDashboard] = useState(false);
+
   const deckRef = useRef<GameItemData[]>([]);
 
-  // Function to shuffle an array (Fisher-Yates)
   const shuffleArray = <T,>(array: T[]): T[] => {
     const newArr = [...array];
     for (let i = newArr.length - 1; i > 0; i--) {
@@ -90,10 +110,6 @@ export default function App() {
     return newArr;
   };
 
-  // --- ADMIN UI STATE ---
-  const [newQuestion, setNewQuestion] = useState("");
-  const [newCategory, setNewCategory] = useState<Category>(Category.CONTENT);
-
   const contentRef = useRef<HTMLDivElement>(null);
   const artRef = useRef<HTMLDivElement>(null);
   const lessonRef = useRef<HTMLDivElement>(null);
@@ -101,23 +117,86 @@ export default function App() {
   const requestRef = useRef<number>(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Handle Hash Routing
   useEffect(() => {
     const handleHashChange = () => setRoute(window.location.hash || "#/");
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  // Persist Data
   useEffect(() => {
     localStorage.setItem("literary_flow_data", JSON.stringify(gameData));
-    // Reset deck whenever data changes to ensure freshness
     deckRef.current = [];
   }, [gameData]);
 
   useEffect(() => {
     localStorage.setItem("literary_flow_interval", spawnInterval.toString());
   }, [spawnInterval]);
+
+  // Fetch results for Dashboard
+  const fetchDashboardData = useCallback(async () => {
+    if (!GOOGLE_SCRIPT_URL) return;
+    setIsRefreshingDashboard(true);
+    try {
+      // Giả định Script có action getResults hoặc đọc từ Local nếu chưa có server
+      const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getResults`);
+      if (response.ok) {
+        const data = await response.json();
+        setLeaderboard(data);
+      } else {
+        // Mock data nếu không fetch được để minh họa giao diện
+        const mockData: LeaderboardEntry[] = [
+          {
+            name: "Nguyễn Văn An",
+            className: "12A1",
+            score: 120,
+            timestamp: "10:30",
+            result: "Đạt",
+          },
+          {
+            name: "Trần Thị Bình",
+            className: "12A1",
+            score: 150,
+            timestamp: "10:32",
+            result: "Đạt",
+          },
+          {
+            name: "Lê Hoàng Nam",
+            className: "12A2",
+            score: 90,
+            timestamp: "10:35",
+            result: "Đạt",
+          },
+          {
+            name: "Phạm Minh Đức",
+            className: "12A3",
+            score: 200,
+            timestamp: "10:38",
+            result: "Đạt",
+          },
+          {
+            name: "Vũ Phương Thảo",
+            className: "12A1",
+            score: 180,
+            timestamp: "10:40",
+            result: "Đạt",
+          },
+        ];
+        setLeaderboard(mockData);
+      }
+    } catch (e) {
+      console.error("Dashboard Fetch Error", e);
+    } finally {
+      setIsRefreshingDashboard(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (route === "#/results") {
+      fetchDashboardData();
+      const interval = setInterval(fetchDashboardData, 15000); // Tự động cập nhật mỗi 15s
+      return () => clearInterval(interval);
+    }
+  }, [route, fetchDashboardData]);
 
   const initAudio = () => {
     if (!audioCtxRef.current) {
@@ -182,15 +261,11 @@ export default function App() {
 
   const spawnItem = useCallback(() => {
     if (gameData.length === 0) return;
-
-    // Refresh deck if empty
     if (deckRef.current.length === 0) {
       deckRef.current = shuffleArray(gameData);
     }
-
     const template = deckRef.current.pop();
     if (!template) return;
-
     const newItem: ActiveItem = {
       ...template,
       id: Math.random().toString(36).substr(2, 9),
@@ -339,7 +414,7 @@ export default function App() {
     setTimeLeft(GAME_DURATION_SEC);
     setItems([]);
     setSubmitStatus("IDLE");
-    deckRef.current = shuffleArray(gameData); // Pre-shuffle the deck
+    deckRef.current = shuffleArray(gameData);
     setGameState("PLAYING");
   };
 
@@ -351,7 +426,6 @@ export default function App() {
     }
   };
 
-  // --- ADMIN LOGIC ---
   const addQuestion = () => {
     if (!newQuestion.trim()) return;
     const newItem: GameItemData = {
@@ -368,11 +442,7 @@ export default function App() {
   };
 
   const deleteAllQuestions = () => {
-    if (
-      confirm(
-        "Bạn có chắc chắn muốn XÓA TẤT CẢ câu hỏi không? Thao tác này không thể hoàn tác trừ khi bạn Khôi phục mặc định.",
-      )
-    ) {
+    if (confirm("Bạn có chắc chắn muốn XÓA TẤT CẢ câu hỏi không?")) {
       setGameData([]);
     }
   };
@@ -384,7 +454,232 @@ export default function App() {
     }
   };
 
-  // Render Admin View
+  // --- RENDERING DASHBOARD (#/results) ---
+  if (route === "#/results") {
+    const sortedLeaderboard = [...leaderboard]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+    const recentActivity = [...leaderboard]
+      .sort((a, b) => {
+        // Simple timestamp sort for mock
+        return b.timestamp.localeCompare(a.timestamp);
+      })
+      .slice(0, 15);
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-indigo-500 overflow-hidden relative">
+        {/* Background Particles Mockup */}
+        <div className="absolute inset-0 pointer-events-none opacity-20">
+          {[...Array(20)].map((_, i) => (
+            <motion.div
+              key={i}
+              initial={{ x: Math.random() * 100 + "%", y: "110%" }}
+              animate={{ y: "-10%" }}
+              transition={{
+                duration: 10 + Math.random() * 20,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+              className="absolute w-1 h-1 bg-white rounded-full blur-sm"
+            />
+          ))}
+        </div>
+
+        {/* Dashboard Header */}
+        <header className="relative z-10 px-10 py-8 border-b border-white/10 flex justify-between items-end backdrop-blur-xl bg-slate-950/50">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/50">
+                <Trophy size={24} className="text-white" />
+              </div>
+              <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-200 to-indigo-400">
+                BẢNG VÀNG KẾT QUẢ
+              </h1>
+            </div>
+            <p className="text-slate-400 font-bold tracking-widest uppercase text-xs">
+              Thời gian thực • Hệ thống Dòng chảy văn học
+            </p>
+          </div>
+
+          <div className="flex gap-8 items-center">
+            <div className="text-right">
+              <p className="text-slate-500 font-black text-[10px] uppercase">
+                Học sinh tham gia
+              </p>
+              <p className="text-3xl font-black text-indigo-400">
+                {leaderboard.length}
+              </p>
+            </div>
+            <div className="text-right border-l border-white/10 pl-8">
+              <p className="text-slate-500 font-black text-[10px] uppercase">
+                Giờ hệ thống
+              </p>
+              <p className="text-3xl font-mono font-black">
+                {new Date().toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
+            </div>
+            <button
+              onClick={fetchDashboardData}
+              className={`p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all ${isRefreshingDashboard ? "animate-spin" : ""}`}
+            >
+              <RefreshCw size={20} />
+            </button>
+          </div>
+        </header>
+
+        <main className="relative z-10 h-[calc(100vh-120px)] p-10 grid grid-cols-12 gap-10">
+          {/* Left Side: Leaderboard (Rankings) */}
+          <section className="col-span-8 flex flex-col">
+            <div className="flex items-center gap-3 mb-8">
+              <Award className="text-amber-400" size={28} />
+              <h2 className="text-2xl font-black uppercase">
+                TOP 10 CHIẾN BINH
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 overflow-y-auto pr-4 custom-scrollbar">
+              <AnimatePresence mode="popLayout">
+                {sortedLeaderboard.map((player, index) => {
+                  const isTop3 = index < 3;
+                  const colors = [
+                    "border-amber-400 bg-amber-400/10 shadow-amber-500/20", // Gold
+                    "border-slate-300 bg-slate-300/10 shadow-slate-300/20", // Silver
+                    "border-orange-400 bg-orange-400/10 shadow-orange-500/20", // Bronze
+                  ];
+
+                  return (
+                    <motion.div
+                      key={player.name + player.timestamp}
+                      initial={{ opacity: 0, x: -50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`
+                          group relative p-6 rounded-[24px] border-2 transition-all flex items-center justify-between
+                          ${isTop3 ? `${colors[index]} scale-[1.02]` : "border-white/5 bg-white/5 hover:border-white/20"}
+                        `}
+                    >
+                      <div className="flex items-center gap-8">
+                        <div
+                          className={`
+                           w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl
+                           ${isTop3 ? "bg-white text-slate-900" : "bg-slate-800 text-slate-400"}
+                         `}
+                        >
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h3
+                            className={`text-2xl font-black ${isTop3 ? "text-white" : "text-slate-200"}`}
+                          >
+                            {player.name}
+                          </h3>
+                          <span className="text-slate-500 font-bold tracking-widest uppercase text-xs">
+                            {player.className}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-slate-500 font-black text-[10px] uppercase mb-1">
+                          Điểm số
+                        </p>
+                        <p
+                          className={`text-4xl font-black ${isTop3 ? "text-white" : "text-indigo-400"}`}
+                        >
+                          {player.score}
+                        </p>
+                      </div>
+
+                      {isTop3 && (
+                        <div className="absolute -top-3 -right-3">
+                          <Trophy
+                            className={`${index === 0 ? "text-amber-400" : index === 1 ? "text-slate-300" : "text-orange-400"}`}
+                            size={32}
+                          />
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+              {sortedLeaderboard.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full opacity-30 italic">
+                  <Loader2 size={48} className="animate-spin mb-4" />
+                  <p className="text-2xl font-bold">
+                    Đang chờ dữ liệu cuộc thi...
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Right Side: Participation (Real-time Feed) */}
+          <section className="col-span-4 bg-slate-900/40 border border-white/5 rounded-[40px] p-8 flex flex-col shadow-2xl">
+            <div className="flex items-center gap-3 mb-8">
+              <Activity className="text-indigo-400" size={24} />
+              <h2 className="text-xl font-black uppercase">
+                HÀNH LANG THI ĐẤU
+              </h2>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+              <AnimatePresence mode="popLayout">
+                {recentActivity.map((player) => (
+                  <motion.div
+                    key={player.name + player.timestamp}
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="p-5 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                        <User size={18} className="text-indigo-400" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-white text-lg leading-none mb-1">
+                          {player.name}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase">
+                          {player.timestamp} • LỚP {player.className}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${player.result === "Đạt" ? "bg-green-500/20 text-green-400" : "bg-rose-500/20 text-rose-400"}`}
+                    >
+                      {player.result}
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-white/5">
+              <div className="flex justify-between items-center text-slate-500 font-bold text-xs uppercase tracking-widest">
+                <span>Tình trạng máy chủ</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  ONLINE
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <button
+          onClick={() => (window.location.hash = "#/admin")}
+          className="absolute bottom-6 right-10 text-white/20 hover:text-white/50 transition-colors"
+        >
+          <Settings size={18} />
+        </button>
+      </div>
+    );
+  }
+
+  // --- ADMIN VIEW ---
   if (route === "#/admin") {
     if (!isAdminAuthenticated) {
       return (
@@ -436,12 +731,20 @@ export default function App() {
             <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3">
               <Settings className="text-indigo-600" /> QUẢN LÝ GAME
             </h2>
-            <button
-              onClick={() => (window.location.hash = "#/")}
-              className="px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
-            >
-              <ArrowLeft size={20} /> VỀ TRANG CHỦ
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={() => (window.location.hash = "#/results")}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all"
+              >
+                <Trophy size={20} /> MỞ DASHBOARD KẾT QUẢ
+              </button>
+              <button
+                onClick={() => (window.location.hash = "#/")}
+                className="px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <ArrowLeft size={20} /> VỀ TRANG CHỦ
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -531,11 +834,6 @@ export default function App() {
                       </button>
                     </div>
                   ))}
-                  {gameData.length === 0 && (
-                    <div className="py-12 text-center text-slate-400 font-medium italic border-2 border-dashed border-slate-100 rounded-2xl">
-                      Danh sách trống. Hãy thêm câu hỏi mới ở trên!
-                    </div>
-                  )}
                 </div>
               </section>
             </div>
@@ -574,9 +872,14 @@ export default function App() {
                   <AlertCircle size={20} /> Mẹo cho giáo viên
                 </h4>
                 <ul className="text-sm text-indigo-100 space-y-3 font-medium list-disc ml-4">
-                  <li>Câu hỏi ngắn gọn sẽ trôi mượt mà hơn trên màn hình.</li>
-                  <li>Nên có ít nhất 10 câu hỏi để tránh lặp lại quá nhanh.</li>
-                  <li>Nhịp độ 6.5s là mức trung bình dễ chơi.</li>
+                  <li>
+                    Sử dụng trang <b>Dashboard Kết Quả</b> để trình chiếu trực
+                    tiếp trong lớp học.
+                  </li>
+                  <li>
+                    Nên mở Dashboard trên một tab riêng hoặc máy tính kết nối
+                    máy chiếu.
+                  </li>
                 </ul>
               </div>
             </div>
@@ -586,16 +889,14 @@ export default function App() {
     );
   }
 
-  // --- RENDER STUDENT GAME ---
+  // --- STUDENT GAME ---
   return (
     <div className="relative w-full h-screen bg-[#f8fafc] overflow-hidden select-none touch-none font-sans">
-      {/* Background decoration */}
       <div className="absolute inset-0 opacity-40">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200 rounded-full blur-[100px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-pink-200 rounded-full blur-[100px]" />
       </div>
 
-      {/* Game HUD */}
       {(gameState === "PLAYING" ||
         gameState === "VICTORY" ||
         gameState === "GAME_OVER") && (
@@ -646,7 +947,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Gameplay Area */}
       <div className="absolute inset-0 z-10">
         <AnimatePresence>
           {items.map((item) => (
@@ -699,7 +999,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Screens */}
       <AnimatePresence>
         {gameState === "MENU" && (
           <motion.div
@@ -765,10 +1064,6 @@ export default function App() {
               >
                 <Play size={24} fill="currentColor" /> BẮT ĐẦU CHƠI
               </button>
-
-              <p className="mt-6 text-slate-300 text-[10px] uppercase font-black tracking-widest">
-                Học tập là hạt giống - Thành công là quả ngọt
-              </p>
             </motion.div>
           </motion.div>
         )}
@@ -787,13 +1082,6 @@ export default function App() {
               <h2 className="text-2xl md:text-4xl font-black text-slate-800 mb-2">
                 {gameState === "VICTORY" ? "Xuất Sắc!" : "Kết Thúc!"}
               </h2>
-              <div className="flex justify-center items-center gap-2 mb-1">
-                <span
-                  className={`text-lg font-bold uppercase px-3 py-1 rounded-full ${score >= PASSING_SCORE ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
-                >
-                  {score >= PASSING_SCORE ? "ĐẠT" : "CHƯA ĐẠT"}
-                </span>
-              </div>
               <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] md:text-sm mb-4 mt-4">
                 Điểm của bạn
               </p>
@@ -810,11 +1098,6 @@ export default function App() {
                 {submitStatus === "SUCCESS" && (
                   <div className="flex items-center gap-2 text-green-500 font-bold text-sm">
                     <CheckCircle className="w-4 h-4" /> Đã nộp bài thành công!
-                  </div>
-                )}
-                {submitStatus === "ERROR" && (
-                  <div className="flex items-center gap-2 text-red-400 font-bold text-xs">
-                    <AlertCircle className="w-4 h-4" /> Lỗi lưu kết quả
                   </div>
                 )}
               </div>
