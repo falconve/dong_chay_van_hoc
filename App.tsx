@@ -77,6 +77,19 @@ export default function App() {
   });
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("IDLE");
 
+  // --- SHUFFLED DECK LOGIC ---
+  const deckRef = useRef<GameItemData[]>([]);
+
+  // Function to shuffle an array (Fisher-Yates)
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const newArr = [...array];
+    for (let i = newArr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+    }
+    return newArr;
+  };
+
   // --- ADMIN UI STATE ---
   const [newQuestion, setNewQuestion] = useState("");
   const [newCategory, setNewCategory] = useState<Category>(Category.CONTENT);
@@ -98,6 +111,8 @@ export default function App() {
   // Persist Data
   useEffect(() => {
     localStorage.setItem("literary_flow_data", JSON.stringify(gameData));
+    // Reset deck whenever data changes to ensure freshness
+    deckRef.current = [];
   }, [gameData]);
 
   useEffect(() => {
@@ -167,7 +182,15 @@ export default function App() {
 
   const spawnItem = useCallback(() => {
     if (gameData.length === 0) return;
-    const template = gameData[Math.floor(Math.random() * gameData.length)];
+
+    // Refresh deck if empty
+    if (deckRef.current.length === 0) {
+      deckRef.current = shuffleArray(gameData);
+    }
+
+    const template = deckRef.current.pop();
+    if (!template) return;
+
     const newItem: ActiveItem = {
       ...template,
       id: Math.random().toString(36).substr(2, 9),
@@ -316,6 +339,7 @@ export default function App() {
     setTimeLeft(GAME_DURATION_SEC);
     setItems([]);
     setSubmitStatus("IDLE");
+    deckRef.current = shuffleArray(gameData); // Pre-shuffle the deck
     setGameState("PLAYING");
   };
 
