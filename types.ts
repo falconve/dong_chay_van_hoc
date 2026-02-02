@@ -1,7 +1,7 @@
 export enum Category {
-  CONTENT = 'NỘI DUNG',
-  ART = 'NGHỆ THUẬT',
-  LESSON = 'BÀI HỌC',
+  CONTENT = "NỘI DUNG",
+  ART = "NGHỆ THUẬT",
+  LESSON = "BÀI HỌC",
 }
 
 export interface GameItemData {
@@ -17,19 +17,16 @@ export interface ActiveItem extends GameItemData {
   isDragging: boolean;
 }
 
-export interface GameHistoryRecord {
-  timestamp: string;
-  content: string;
-  selectedCategory: string;
-  correctCategory: string;
-  result: string;
-}
-
 export interface PlayerInfo {
   name: string;
   className: string;
 }
 
-export type SubmitStatus = 'IDLE' | 'SENDING' | 'SUCCESS' | 'ERROR';
+export type SubmitStatus = "IDLE" | "SENDING" | "SUCCESS" | "ERROR";
 
-export type GameState = 'MENU' | 'PLAYING' | 'GAME_OVER' | 'VICTORY';
+export type GameState =
+  | "MENU"
+  | "PLAYING"
+  | "GAME_OVER"
+  | "VICTORY"
+  | "SETTINGS";
