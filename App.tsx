@@ -23,6 +23,7 @@ import {
   Info,
   ExternalLink,
   BarChart3,
+  Database,
 } from "lucide-react";
 import {
   Category,
@@ -89,6 +90,13 @@ export default function App() {
   const deckRef = useRef<GameItemData[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  // Cập nhật route khi hash thay đổi
+  useEffect(() => {
+    const handleHashChange = () => setRoute(window.location.hash || "#/");
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
   // Xử lý Audio
   const initAudio = () => {
     if (!audioCtxRef.current)
@@ -118,20 +126,20 @@ export default function App() {
     osc.stop(now + 0.3);
   };
 
-  // --- API LOGIC (CORS FIX) ---
+  // --- API LOGIC ---
   const fetchDashboardData = useCallback(async () => {
     setIsRefreshingDashboard(true);
     setDashboardError(null);
     try {
-      // Sử dụng fetch mặc định (cors) - yêu cầu Apps Script trả về đúng Header
       const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getResults`);
       if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
       setLeaderboard(Array.isArray(data) ? data : []);
     } catch (e: any) {
       console.error("CORS Error detected", e);
-      setDashboardError("Lỗi kết nối dữ liệu (CORS).");
-      // Fallback mock data
+      setDashboardError(
+        "Lỗi kết nối dữ liệu (CORS). Hãy kiểm tra cấu hình Google Script.",
+      );
       if (leaderboard.length === 0) {
         setLeaderboard([
           {
@@ -148,6 +156,13 @@ export default function App() {
     }
   }, [leaderboard.length]);
 
+  // Tự động load dữ liệu khi vào trang kết quả
+  useEffect(() => {
+    if (route === "#/results") {
+      fetchDashboardData();
+    }
+  }, [route, fetchDashboardData]);
+
   const sendData = async (finalScore: number) => {
     if (!GOOGLE_SCRIPT_URL) return;
     setSubmitStatus("SENDING");
@@ -160,7 +175,6 @@ export default function App() {
     };
 
     try {
-      // POST với mode no-cors để tránh Preflight lỗi, nhưng sẽ không đọc được response
       await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
@@ -197,7 +211,7 @@ export default function App() {
       id: Math.random().toString(36).substr(2, 9),
       x: -40,
       y: 20 + Math.random() * 40,
-      speed: 0.2 + score / 1000, // Tăng tốc độ theo điểm
+      speed: 0.2 + score / 1000,
       isDragging: false,
     };
     setItems((prev) => [...prev, newItem]);
@@ -273,7 +287,6 @@ export default function App() {
     const item = items.find((i) => i.id === id);
     if (!item) return;
 
-    // Check collision logic (simplified for clarity)
     const zones = [
       {
         id: Category.CONTENT,
@@ -339,7 +352,7 @@ export default function App() {
               <Trophy size={32} />
             </div>
             <div>
-              <h1 className="text-3xl md:text-5xl font-black tracking-tighter">
+              <h1 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
                 BẢNG VÀNG
               </h1>
               <p className="text-indigo-400 font-bold uppercase tracking-widest text-xs">
@@ -353,7 +366,7 @@ export default function App() {
                 onClick={() => setShowFixGuide(true)}
                 className="px-4 py-2 bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30 text-xs font-black animate-pulse flex items-center gap-2"
               >
-                <WifiOff size={16} /> LỖI KẾT NỐI (CORS) - CÁCH SỬA
+                <WifiOff size={16} /> LỖI KẾT NỐI - CÁCH SỬA
               </button>
             )}
             <button
@@ -375,66 +388,94 @@ export default function App() {
 
         <main className="grid grid-cols-1 lg:grid-cols-3 gap-12 max-w-7xl mx-auto">
           <section className="lg:col-span-2 space-y-6">
-            <h2 className="text-xl font-black flex items-center gap-3">
+            <h2 className="text-xl font-black flex items-center gap-3 uppercase tracking-widest">
               {" "}
               <Activity className="text-indigo-400" /> TOP CHIẾN BINH{" "}
             </h2>
-            <div className="space-y-4">
-              {leaderboard
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 10)
-                .map((p, i) => (
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    key={i}
-                    className="bg-white/5 border border-white/5 p-6 rounded-3xl flex items-center justify-between hover:border-indigo-500/50 transition-all"
-                  >
-                    <div className="flex items-center gap-6">
-                      <div
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl ${i < 3 ? "bg-amber-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
-                      >
-                        {" "}
-                        {i + 1}{" "}
+
+            {isRefreshingDashboard && leaderboard.length === 0 ? (
+              <div className="bg-white/5 rounded-3xl p-12 flex flex-col items-center justify-center border border-dashed border-white/10">
+                <Loader2
+                  size={48}
+                  className="animate-spin text-indigo-500 mb-4"
+                />
+                <p className="text-slate-400 font-bold">
+                  Đang tải dữ liệu từ máy chủ...
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {leaderboard.length === 0 && !isRefreshingDashboard && (
+                  <div className="bg-white/5 rounded-3xl p-12 text-center border border-white/10">
+                    <Database
+                      size={48}
+                      className="mx-auto text-slate-600 mb-4 opacity-20"
+                    />
+                    <p className="text-slate-500 font-bold italic">
+                      Chưa có lượt chơi nào được ghi nhận.
+                    </p>
+                  </div>
+                )}
+                {leaderboard
+                  .sort((a, b) => b.score - a.score)
+                  .slice(0, 15)
+                  .map((p, i) => (
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      key={i}
+                      className="bg-white/5 border border-white/5 p-6 rounded-3xl flex items-center justify-between hover:border-indigo-500/50 transition-all hover:bg-white/[0.08] group"
+                    >
+                      <div className="flex items-center gap-6">
+                        <div
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl transition-transform group-hover:scale-110 ${i === 0 ? "bg-amber-400 text-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.4)]" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-orange-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                        >
+                          {" "}
+                          {i + 1}{" "}
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black group-hover:text-indigo-400 transition-colors">
+                            {p.name}
+                          </h3>
+                          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
+                            {p.className}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-xl font-black">{p.name}</h3>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
-                          {p.className}
+                      <div className="text-right">
+                        <p className="text-3xl font-black text-indigo-400 group-hover:scale-105 transition-transform">
+                          {p.score}
+                        </p>
+                        <p className="text-[10px] text-slate-600 font-black uppercase tracking-tighter">
+                          {p.timestamp}
                         </p>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-3xl font-black text-indigo-400">
-                        {p.score}
-                      </p>
-                      <p className="text-[10px] text-slate-600 font-black uppercase">
-                        {p.timestamp}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-            </div>
+                    </motion.div>
+                  ))}
+              </div>
+            )}
           </section>
 
-          <section className="bg-slate-900/50 border border-white/5 p-8 rounded-[40px] h-fit">
-            <h2 className="text-xl font-black mb-8 flex items-center gap-3">
+          <section className="bg-slate-900/50 border border-white/5 p-8 rounded-[40px] h-fit sticky top-12">
+            <h2 className="text-xl font-black mb-8 flex items-center gap-3 uppercase tracking-widest">
               {" "}
               <BarChart3 className="text-pink-400" /> THỐNG KÊ NHANH{" "}
             </h2>
-            <div className="space-y-8">
+            <div className="space-y-6">
               <div className="p-6 bg-indigo-500/10 rounded-3xl border border-indigo-500/20">
                 <p className="text-slate-400 text-xs font-bold uppercase mb-1">
                   Tổng lượt chơi
                 </p>
-                <p className="text-4xl font-black">{leaderboard.length}</p>
+                <p className="text-5xl font-black text-indigo-400">
+                  {leaderboard.length}
+                </p>
               </div>
               <div className="p-6 bg-green-500/10 rounded-3xl border border-green-500/20">
                 <p className="text-slate-400 text-xs font-bold uppercase mb-1">
                   Tỷ lệ đạt
                 </p>
-                <p className="text-4xl font-black">
+                <p className="text-5xl font-black text-green-400">
                   {leaderboard.length > 0
                     ? Math.round(
                         (leaderboard.filter((p) => p.result === "Đạt").length /
@@ -443,6 +484,17 @@ export default function App() {
                       )
                     : 0}
                   %
+                </p>
+              </div>
+              <div className="pt-8 border-t border-white/5 space-y-4">
+                <div className="flex items-center gap-3 text-slate-500 text-xs font-bold uppercase">
+                  {" "}
+                  <Info size={16} /> Hướng dẫn{" "}
+                </div>
+                <p className="text-slate-400 text-[11px] leading-relaxed italic">
+                  Dữ liệu được cập nhật trực tiếp từ hệ thống lưu trữ Google
+                  Sheets. Nếu không thấy tên mình, vui lòng nhấn nút làm mới ở
+                  góc trên bên phải.
                 </p>
               </div>
             </div>
@@ -460,7 +512,7 @@ export default function App() {
               <div className="max-w-3xl w-full bg-slate-900 border border-white/10 rounded-[40px] p-10 overflow-y-auto max-h-[90vh]">
                 <div className="flex justify-between mb-8">
                   <h2 className="text-3xl font-black text-rose-400">
-                    SỬA LỖI CORS (TRÊN GOOGLE SCRIPT)
+                    SỬA LỖI CORS (GOOGLE SCRIPT)
                   </h2>
                   <button
                     onClick={() => setShowFixGuide(false)}
@@ -471,10 +523,10 @@ export default function App() {
                   </button>
                 </div>
                 <p className="mb-6 text-slate-400">
-                  Để Vercel có thể đọc dữ liệu, mã Apps Script của bạn{" "}
-                  <b>PHẢI</b> như sau:
+                  Bạn cần cập nhật mã Google Script để cho phép ứng dụng truy
+                  cập dữ liệu:
                 </p>
-                <pre className="bg-black/50 p-6 rounded-2xl text-green-400 text-xs overflow-x-auto mb-6">
+                <pre className="bg-black/50 p-6 rounded-2xl text-green-400 text-xs overflow-x-auto mb-6 leading-relaxed">
                   {`function doGet(e) {
   var action = e.parameter.action;
   if (action === 'getResults') {
@@ -487,23 +539,15 @@ export default function App() {
         className: rows[i][2], score: rows[i][3], result: rows[i][4]
       });
     }
-    // QUAN TRỌNG NHẤT: Trả về ContentService với JSON mime type
     return ContentService.createTextOutput(JSON.stringify(results))
       .setMimeType(ContentService.MimeType.JSON);
   }
-}
-
-function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  sheet.appendRow([data.timestamp, data.name, data.className, data.score, data.result]);
-  return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
 }`}
                 </pre>
                 <div className="bg-blue-500/10 p-6 rounded-2xl border border-blue-500/20 text-sm text-blue-200">
                   <p>
-                    <b>Lưu ý:</b> Sau khi sửa xong, nhấn "Triển khai mới", chọn
-                    quyền "Anyone" (Bất kỳ ai) và sao chép URL mới dán vào code.
+                    <b>Lưu ý:</b> Sau khi sửa, chọn <b>Triển khai mới</b>, đặt
+                    quyền là <b>Anyone</b> và copy URL mới.
                   </p>
                 </div>
               </div>
@@ -514,7 +558,7 @@ function doPost(e) {
     );
   }
 
-  // --- ADMIN VIEW --- (Giữ nguyên logic bảo mật)
+  // --- ADMIN VIEW ---
   if (route === "#/admin") {
     if (!isAdminAuthenticated) {
       return (
@@ -522,12 +566,18 @@ function doPost(e) {
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white p-12 rounded-[40px] w-full max-w-sm text-center"
+            className="bg-white p-12 rounded-[40px] w-full max-w-sm text-center shadow-[0_0_60px_rgba(79,70,229,0.3)]"
           >
-            <Lock className="mx-auto text-indigo-600 mb-6" size={48} />
-            <h2 className="text-2xl font-black mb-8 text-slate-800">
+            <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              {" "}
+              <Lock className="text-indigo-600" size={40} />{" "}
+            </div>
+            <h2 className="text-2xl font-black mb-2 text-slate-800">
               Quyền Giáo Viên
             </h2>
+            <p className="text-slate-400 text-sm font-bold mb-8">
+              Vui lòng nhập mật khẩu quản trị
+            </p>
             <input
               type="password"
               value={adminPasswordInput}
@@ -536,114 +586,164 @@ function doPost(e) {
                 e.key === "Enter" &&
                 (adminPasswordInput === ADMIN_PASSWORD
                   ? setIsAdminAuthenticated(true)
-                  : alert("Sai!"))
+                  : alert("Sai mật khẩu!"))
               }
               placeholder="Mật khẩu..."
-              className="w-full p-4 bg-slate-100 rounded-2xl mb-6 text-center font-bold text-xl outline-none focus:ring-2 ring-indigo-500"
+              className="w-full p-5 bg-slate-100 rounded-2xl mb-6 text-center font-bold text-xl outline-none focus:ring-4 ring-indigo-500/20 border-2 border-transparent focus:border-indigo-500 transition-all"
               autoFocus
             />
             <button
               onClick={() =>
                 adminPasswordInput === ADMIN_PASSWORD
                   ? setIsAdminAuthenticated(true)
-                  : alert("Sai!")
+                  : alert("Sai mật khẩu!")
               }
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black"
+              className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
             >
               XÁC NHẬN
+            </button>
+            <button
+              onClick={() => (window.location.hash = "#/")}
+              className="mt-4 text-slate-400 font-bold hover:text-indigo-600 transition-colors"
+            >
+              Quay lại
             </button>
           </motion.div>
         </div>
       );
     }
-    // Giao diện quản lý câu hỏi (Tương tự code cũ nhưng trau chuốt hơn)
+
     return (
       <div className="min-h-screen bg-slate-50 p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-12">
-            <h1 className="text-3xl font-black text-slate-800">
-              Quản Lý Nội Dung
-            </h1>
+        <div className="max-w-5xl mx-auto">
+          <header className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200">
+                {" "}
+                <Settings className="text-slate-800" size={32} />{" "}
+              </div>
+              <div>
+                <h1 className="text-3xl font-black text-slate-800">
+                  QUẢN LÝ NỘI DUNG
+                </h1>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">
+                  Cấu hình bài tập phân loại
+                </p>
+              </div>
+            </div>
             <button
               onClick={() => (window.location.hash = "#/")}
-              className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-bold"
+              className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
             >
               {" "}
-              <ArrowLeft className="inline mr-2" size={18} /> VỀ GAME{" "}
+              <ArrowLeft size={18} /> QUAY LẠI GAME{" "}
             </button>
-          </div>
+          </header>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <section className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
               <h2 className="text-xl font-black mb-6 flex items-center gap-2">
                 {" "}
-                <Plus size={20} /> THÊM CÂU HỎI{" "}
+                <Plus size={20} className="text-indigo-600" /> THÊM CÂU HỎI
+                MỚI{" "}
               </h2>
-              <textarea
-                value={newQuestion}
-                onChange={(e) => setNewQuestion(e.target.value)}
-                className="w-full p-4 bg-slate-50 border rounded-2xl mb-4 min-h-[120px]"
-                placeholder="Nội dung kiến thức..."
-              />
-              <select
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value as Category)}
-                className="w-full p-4 bg-slate-50 border rounded-2xl mb-4 font-bold"
-              >
-                {Object.values(Category).map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => {
-                  if (!newQuestion) return;
-                  setGameData((prev) => [
-                    ...prev,
-                    {
-                      id: Math.random().toString(),
-                      text: newQuestion,
-                      category: newCategory,
-                    },
-                  ]);
-                  setNewQuestion("");
-                }}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black"
-              >
-                {" "}
-                LƯU CÂU HỎI{" "}
-              </button>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
+                    Phân loại
+                  </label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value as Category)}
+                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-500"
+                  >
+                    {Object.values(Category).map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
+                    Nội dung kiến thức
+                  </label>
+                  <textarea
+                    value={newQuestion}
+                    onChange={(e) => setNewQuestion(e.target.value)}
+                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl min-h-[160px] font-medium outline-none focus:ring-2 ring-indigo-500 transition-all"
+                    placeholder="Ví dụ: Nghệ thuật trùng điệp tạo nên giọng điệu và âm hưởng hùng hồn..."
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    if (!newQuestion.trim()) return;
+                    setGameData((prev) => [
+                      ...prev,
+                      {
+                        id: Math.random().toString(36).substr(2, 9),
+                        text: newQuestion,
+                        category: newCategory,
+                      },
+                    ]);
+                    setNewQuestion("");
+                  }}
+                  className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                >
+                  {" "}
+                  LƯU VÀO DANH SÁCH{" "}
+                </button>
+              </div>
             </section>
 
             <section className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
-              <h2 className="text-xl font-black mb-6">
-                DANH SÁCH ({gameData.length})
-              </h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-black flex items-center gap-2">
+                  {" "}
+                  DANH SÁCH CÂU HỎI{" "}
+                  <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg text-sm">
+                    {gameData.length}
+                  </span>
+                </h2>
+              </div>
               <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                 {gameData.map((q) => (
                   <div
                     key={q.id}
-                    className="p-4 bg-slate-50 rounded-2xl flex justify-between items-start"
+                    className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex justify-between items-start group hover:bg-white hover:border-indigo-200 transition-all"
                   >
                     <div className="flex-1 mr-4">
-                      <span className="text-[10px] font-black px-2 py-1 bg-white rounded-full uppercase tracking-tighter mb-2 inline-block">
+                      <span
+                        className={`text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-tighter mb-2 inline-block ${q.category === Category.CONTENT ? "bg-blue-100 text-blue-600" : q.category === Category.ART ? "bg-purple-100 text-purple-600" : "bg-amber-100 text-amber-600"}`}
+                      >
                         {" "}
                         {q.category}{" "}
                       </span>
-                      <p className="text-sm font-medium">{q.text}</p>
+                      <p className="text-sm font-semibold text-slate-700 leading-relaxed">
+                        {q.text}
+                      </p>
                     </div>
                     <button
-                      onClick={() =>
-                        setGameData((prev) => prev.filter((i) => i.id !== q.id))
-                      }
-                      className="text-rose-500 p-2 hover:bg-rose-50 rounded-lg"
+                      onClick={() => {
+                        if (confirm("Xóa câu hỏi này?"))
+                          setGameData((prev) =>
+                            prev.filter((i) => i.id !== q.id),
+                          );
+                      }}
+                      className="text-slate-300 p-2 hover:bg-rose-50 hover:text-rose-500 rounded-xl transition-all"
                     >
                       {" "}
-                      <Trash2 size={18} />{" "}
+                      <Trash2 size={20} />{" "}
                     </button>
                   </div>
                 ))}
+                {gameData.length === 0 && (
+                  <div className="text-center py-20">
+                    <p className="text-slate-400 font-bold italic">
+                      Chưa có dữ liệu nào.
+                    </p>
+                  </div>
+                )}
               </div>
             </section>
           </div>
