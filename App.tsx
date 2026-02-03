@@ -40,7 +40,7 @@ import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwOlqvZClg3IB1SsNKMW0gwcvpezNoiOBKW-zi5KSlLwQwdtxSkJcXVcXfENGBEUqxt1A/exec";
+  "https://script.google.com/u/0/home/projects/1s47DyU0vYrrqbI0Wlc2aZaIUwC6uYMFBs8-Wtt0vRdrP71GJx2d6KWHM/edit";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
 const ADMIN_PASSWORD = "123";
