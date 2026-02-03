@@ -24,6 +24,7 @@ import {
   ExternalLink,
   BarChart3,
   Database,
+  Zap,
 } from "lucide-react";
 import {
   Category,
@@ -38,7 +39,6 @@ import { DropZone } from "./components/DropZone";
 import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
-// Cấu hình linh hoạt cho Google Script
 const GOOGLE_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz-V3kfZ9zhQPWYDmiP_Y3MnTYtHQx5AEBx94gX-vGIynrzNa-JzkqFqFxfTSVat22v/exec";
 const GAME_DURATION_SEC = 180;
@@ -48,7 +48,7 @@ const ADMIN_PASSWORD = "123";
 interface LeaderboardEntry {
   name: string;
   className: string;
-  score: number;
+  score: number | string;
   timestamp: string;
   result: string;
 }
@@ -90,14 +90,12 @@ export default function App() {
   const deckRef = useRef<GameItemData[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Cập nhật route khi hash thay đổi
   useEffect(() => {
     const handleHashChange = () => setRoute(window.location.hash || "#/");
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  // Xử lý Audio
   const initAudio = () => {
     if (!audioCtxRef.current)
       audioCtxRef.current = new (
@@ -127,8 +125,8 @@ export default function App() {
   };
 
   // --- API LOGIC ---
-  const fetchDashboardData = useCallback(async () => {
-    setIsRefreshingDashboard(true);
+  const fetchDashboardData = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshingDashboard(true);
     setDashboardError(null);
     try {
       const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getResults`);
@@ -137,41 +135,35 @@ export default function App() {
       setLeaderboard(Array.isArray(data) ? data : []);
     } catch (e: any) {
       console.error("CORS Error detected", e);
-      setDashboardError(
-        "Lỗi kết nối dữ liệu (CORS). Hãy kiểm tra cấu hình Google Script.",
-      );
-      if (leaderboard.length === 0) {
-        setLeaderboard([
-          {
-            name: "Học sinh mẫu",
-            className: "12A1",
-            score: 100,
-            timestamp: "vừa xong",
-            result: "Đạt",
-          },
-        ]);
-      }
+      if (!silent) setDashboardError("Lỗi kết nối dữ liệu.");
     } finally {
-      setIsRefreshingDashboard(false);
+      if (!silent) setIsRefreshingDashboard(false);
     }
-  }, [leaderboard.length]);
+  }, []);
 
-  // Tự động load dữ liệu khi vào trang kết quả
+  // Tự động làm mới bảng điểm mỗi 10 giây khi đang ở trang Kết quả
   useEffect(() => {
     if (route === "#/results") {
-      fetchDashboardData();
+      fetchDashboardData(); // Lần đầu tiên vào trang
+      const interval = setInterval(() => {
+        fetchDashboardData(true); // Tự động làm mới "ngầm"
+      }, 10000);
+      return () => clearInterval(interval);
     }
   }, [route, fetchDashboardData]);
 
-  const sendData = async (finalScore: number) => {
+  const sendData = async (finalScore: number | string, status: string) => {
     if (!GOOGLE_SCRIPT_URL) return;
-    setSubmitStatus("SENDING");
     const payload = {
-      timestamp: new Date().toLocaleString("vi-VN"),
+      timestamp: new Date().toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
       name: playerInfo.name,
       className: playerInfo.className,
       score: finalScore,
-      result: finalScore >= PASSING_SCORE ? "Đạt" : "Chưa đạt",
+      result: status,
     };
 
     try {
@@ -181,9 +173,9 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      setSubmitStatus("SUCCESS");
+      if (status !== "Đang thi") setSubmitStatus("SUCCESS");
     } catch (error) {
-      setSubmitStatus("ERROR");
+      if (status !== "Đang thi") setSubmitStatus("ERROR");
     }
   };
 
@@ -191,6 +183,10 @@ export default function App() {
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
     initAudio();
+
+    // GỬI THÔNG TIN LÊN SHEETS NGAY LẬP TỨC KHI NHẤN BẮT ĐẦU
+    sendData("---", "Đang thi");
+
     setScore(0);
     setLives(5);
     setTimeLeft(GAME_DURATION_SEC);
@@ -266,7 +262,7 @@ export default function App() {
         setTimeLeft((t) => {
           if (t <= 1) {
             setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
-            sendData(score);
+            sendData(score, score >= PASSING_SCORE ? "Đạt" : "Chưa đạt");
             return 0;
           }
           return t - 1;
@@ -279,9 +275,9 @@ export default function App() {
   useEffect(() => {
     if (lives <= 0 && gameState === "PLAYING") {
       setGameState("GAME_OVER");
-      sendData(score);
+      sendData(score, "Chưa đạt (Hết mạng)");
     }
-  }, [lives, gameState]);
+  }, [lives, gameState, score]);
 
   const handleDragEnd = (id: string, info: any) => {
     const item = items.find((i) => i.id === id);
@@ -355,9 +351,12 @@ export default function App() {
               <h1 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
                 BẢNG VÀNG
               </h1>
-              <p className="text-indigo-400 font-bold uppercase tracking-widest text-xs">
-                Hệ thống Dòng chảy văn học
-              </p>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <p className="text-indigo-400 font-bold uppercase tracking-widest text-[10px]">
+                  ĐANG ĐỒNG BỘ TRỰC TUYẾN
+                </p>
+              </div>
             </div>
           </div>
           <div className="flex gap-4">
@@ -371,14 +370,14 @@ export default function App() {
             )}
             <button
               onClick={() => (window.location.hash = "#/")}
-              className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold hover:bg-white/10 flex items-center gap-2"
+              className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold hover:bg-white/10 flex items-center gap-2 transition-all"
             >
               {" "}
               <ArrowLeft size={18} /> QUAY LẠI{" "}
             </button>
             <button
-              onClick={fetchDashboardData}
-              className={`p-3 bg-indigo-600 rounded-xl hover:bg-indigo-700 ${isRefreshingDashboard ? "animate-spin" : ""}`}
+              onClick={() => fetchDashboardData()}
+              className={`p-3 bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-all ${isRefreshingDashboard ? "animate-spin" : ""}`}
             >
               {" "}
               <RefreshCw size={20} />{" "}
@@ -390,7 +389,8 @@ export default function App() {
           <section className="lg:col-span-2 space-y-6">
             <h2 className="text-xl font-black flex items-center gap-3 uppercase tracking-widest">
               {" "}
-              <Activity className="text-indigo-400" /> TOP CHIẾN BINH{" "}
+              <Zap className="text-amber-400 fill-amber-400" size={24} /> DANH
+              SÁCH THÍ SINH{" "}
             </h2>
 
             {isRefreshingDashboard && leaderboard.length === 0 ? (
@@ -416,43 +416,49 @@ export default function App() {
                     </p>
                   </div>
                 )}
-                {leaderboard
-                  .sort((a, b) => b.score - a.score)
-                  .slice(0, 15)
-                  .map((p, i) => (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      key={i}
-                      className="bg-white/5 border border-white/5 p-6 rounded-3xl flex items-center justify-between hover:border-indigo-500/50 transition-all hover:bg-white/[0.08] group"
-                    >
-                      <div className="flex items-center gap-6">
-                        <div
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl transition-transform group-hover:scale-110 ${i === 0 ? "bg-amber-400 text-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.4)]" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-orange-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
-                        >
-                          {" "}
-                          {i + 1}{" "}
-                        </div>
-                        <div>
+                {leaderboard.map((p, i) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                    key={i}
+                    className={`bg-white/5 border border-white/5 p-6 rounded-3xl flex items-center justify-between hover:border-indigo-500/50 transition-all hover:bg-white/[0.08] group ${p.result === "Đang thi" ? "border-amber-500/30 bg-amber-500/5" : ""}`}
+                  >
+                    <div className="flex items-center gap-6">
+                      <div
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl transition-transform group-hover:scale-110 ${p.result === "Đang thi" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                      >
+                        {" "}
+                        {i + 1}{" "}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-3">
                           <h3 className="text-xl font-black group-hover:text-indigo-400 transition-colors">
                             {p.name}
                           </h3>
-                          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
-                            {p.className}
-                          </p>
+                          {p.result === "Đang thi" && (
+                            <span className="bg-amber-500/20 text-amber-500 text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">
+                              ĐANG THI
+                            </span>
+                          )}
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-black text-indigo-400 group-hover:scale-105 transition-transform">
-                          {p.score}
-                        </p>
-                        <p className="text-[10px] text-slate-600 font-black uppercase tracking-tighter">
-                          {p.timestamp}
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
+                          {p.className}
                         </p>
                       </div>
-                    </motion.div>
-                  ))}
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`text-3xl font-black transition-transform ${p.result === "Đang thi" ? "text-amber-500" : "text-indigo-400"}`}
+                      >
+                        {p.score}
+                      </p>
+                      <p className="text-[10px] text-slate-600 font-black uppercase tracking-tighter">
+                        {p.timestamp}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             )}
           </section>
@@ -465,7 +471,7 @@ export default function App() {
             <div className="space-y-6">
               <div className="p-6 bg-indigo-500/10 rounded-3xl border border-indigo-500/20">
                 <p className="text-slate-400 text-xs font-bold uppercase mb-1">
-                  Tổng lượt chơi
+                  Tổng lượt tham gia
                 </p>
                 <p className="text-5xl font-black text-indigo-400">
                   {leaderboard.length}
@@ -489,12 +495,11 @@ export default function App() {
               <div className="pt-8 border-t border-white/5 space-y-4">
                 <div className="flex items-center gap-3 text-slate-500 text-xs font-bold uppercase">
                   {" "}
-                  <Info size={16} /> Hướng dẫn{" "}
+                  <Zap size={16} /> Tự động{" "}
                 </div>
                 <p className="text-slate-400 text-[11px] leading-relaxed italic">
-                  Dữ liệu được cập nhật trực tiếp từ hệ thống lưu trữ Google
-                  Sheets. Nếu không thấy tên mình, vui lòng nhấn nút làm mới ở
-                  góc trên bên phải.
+                  Bảng này tự động làm mới sau mỗi 10 giây. Thông tin thí sinh
+                  sẽ xuất hiện ngay khi họ nhấn nút "Bắt đầu chơi".
                 </p>
               </div>
             </div>
@@ -533,7 +538,8 @@ export default function App() {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     var rows = sheet.getDataRange().getValues();
     var results = [];
-    for(var i=1; i<rows.length; i++) {
+    // Lấy từ dưới lên để thấy người mới nhất trước
+    for(var i=rows.length-1; i>=1; i--) {
       results.push({
         timestamp: rows[i][0], name: rows[i][1],
         className: rows[i][2], score: rows[i][3], result: rows[i][4]
@@ -755,12 +761,10 @@ export default function App() {
   // --- MAIN GAME UI ---
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
-      {/* Nền động */}
       <div className="absolute inset-0 z-0 opacity-30">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#c7d2fe_0%,transparent_50%)]" />
       </div>
 
-      {/* Header Info */}
       <AnimatePresence>
         {gameState === "PLAYING" && (
           <motion.div
@@ -830,7 +834,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Area Thả 3 Mục */}
       <div className="absolute bottom-0 left-0 right-0 h-[35%] z-20 p-8 grid grid-cols-3 gap-8 items-stretch bg-gradient-to-t from-white via-white/80 to-transparent">
         <div id="zone-CONTENT" className="h-full">
           {" "}
@@ -855,7 +858,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Lớp chứa Thẻ Trôi */}
       <div className="absolute inset-0 z-10 overflow-hidden">
         <AnimatePresence>
           {items.map((item) => (
@@ -915,7 +917,6 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      {/* Menu & Kết thúc */}
       <AnimatePresence>
         {gameState === "MENU" && (
           <motion.div
@@ -943,7 +944,7 @@ export default function App() {
                   onChange={(e) =>
                     setPlayerInfo((p) => ({ ...p, name: e.target.value }))
                   }
-                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold text-center outline-none focus:ring-4 ring-indigo-500/20"
+                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold text-center outline-none focus:ring-4 ring-indigo-500/20 border-2 border-transparent focus:border-indigo-500 transition-all"
                 />
                 <input
                   type="text"
@@ -952,13 +953,13 @@ export default function App() {
                   onChange={(e) =>
                     setPlayerInfo((p) => ({ ...p, className: e.target.value }))
                   }
-                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold text-center outline-none focus:ring-4 ring-indigo-500/20"
+                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold text-center outline-none focus:ring-4 ring-indigo-500/20 border-2 border-transparent focus:border-indigo-500 transition-all"
                 />
               </div>
               <button
                 onClick={startGame}
                 disabled={!playerInfo.name || !playerInfo.className}
-                className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-2xl shadow-2xl shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+                className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-2xl shadow-2xl shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-3 active:scale-95"
               >
                 {" "}
                 <Play fill="currentColor" /> BẮT ĐẦU CHƠI{" "}
@@ -1006,29 +1007,31 @@ export default function App() {
               <div className="text-7xl font-black text-indigo-600 mb-8 tracking-tighter">
                 {score}
               </div>
-              <div className="mb-8">
+              <div className="mb-8 min-h-[40px]">
                 {submitStatus === "SENDING" && (
                   <div className="flex items-center justify-center gap-2 text-indigo-500 font-bold">
                     {" "}
-                    <Loader2 className="animate-spin" /> Đang nộp bài...{" "}
+                    <Loader2 className="animate-spin" /> Đang lưu kết
+                    quả...{" "}
                   </div>
                 )}
                 {submitStatus === "SUCCESS" && (
                   <div className="text-green-500 font-bold">
                     {" "}
-                    <CheckCircle className="inline mr-2" /> Đã lưu kết quả!{" "}
+                    <CheckCircle className="inline mr-2" /> Đã cập nhật thành
+                    công!{" "}
                   </div>
                 )}
                 {submitStatus === "ERROR" && (
                   <div className="text-rose-500 font-bold">
                     {" "}
-                    Lỗi khi nộp bài.{" "}
+                    Lỗi khi cập nhật kết quả.{" "}
                   </div>
                 )}
               </div>
               <button
                 onClick={() => setGameState("MENU")}
-                className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-black transition-all"
+                className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-black transition-all shadow-xl"
               >
                 {" "}
                 <RotateCcw className="inline mr-2" size={24} /> CHƠI LẠI{" "}
