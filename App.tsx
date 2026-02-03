@@ -40,7 +40,7 @@ import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbyyQxuyMUsDZ_QyCFrcygdJ9l3VMz0yEzsxrrIif9rh_EHUHq-HJKj5YfCfbzT1NNZD/exec";
+  "https://script.google.com/macros/s/AKfycbwOlqvZClg3IB1SsNKMW0gwcvpezNoiOBKW-zi5KSlLwQwdtxSkJcXVcXfENGBEUqxt1A/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
 const ADMIN_PASSWORD = "123";
@@ -122,40 +122,34 @@ export default function App() {
     osc.stop(now + 0.3);
   };
 
-  // Hàm định dạng ngày giờ chuẩn Việt Nam
   const formatVNTime = (dateInput: any) => {
     if (!dateInput || dateInput === "---") return "Vừa xong";
     try {
       const d = new Date(dateInput);
-      if (isNaN(d.getTime()) || d.getFullYear() < 1920)
-        return dateInput.toString().split("T")[0];
+      if (isNaN(d.getTime()) || d.getFullYear() < 1920) return "Cũ";
       return (
-        d.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }) +
+        d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) +
         " " +
         d.toLocaleDateString("vi-VN")
       );
     } catch {
-      return dateInput;
+      return "Không rõ";
     }
   };
 
-  // --- API LOGIC ---
   const fetchDashboardData = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshingDashboard(true);
     setDashboardError(null);
     try {
       const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getResults`);
-      if (!response.ok) throw new Error("Network response was not ok");
+      if (!response.ok) throw new Error("Network response error");
       const data = await response.json();
 
       if (Array.isArray(data)) {
-        // Lọc bỏ dòng trống và sắp xếp: Điểm cao lên đầu, người chơi mới lên đầu
         const processed = data
-          .filter((item) => item.name && item.name.trim() !== "")
+          .filter(
+            (item) => item && item.name && item.name.toString().trim() !== "",
+          )
           .sort((a, b) => {
             const scoreA = a.score === "---" ? -1 : Number(a.score);
             const scoreB = b.score === "---" ? -1 : Number(b.score);
@@ -167,8 +161,7 @@ export default function App() {
         setLeaderboard(processed);
       }
     } catch (e: any) {
-      console.error("Fetch error", e);
-      if (!silent) setDashboardError("Không thể kết nối máy chủ.");
+      if (!silent) setDashboardError("Lỗi kết nối.");
     } finally {
       if (!silent) setIsRefreshingDashboard(false);
     }
@@ -186,7 +179,7 @@ export default function App() {
     if (!GOOGLE_SCRIPT_URL) return;
     const payload = {
       timestamp: new Date().toISOString(),
-      name: `${playerInfo.name} - ${playerInfo.className}`, // Ghép tên và lớp vào cột B cho khớp sheet của bạn
+      name: `${playerInfo.name} - ${playerInfo.className}`,
       score: finalScore,
       result: status,
     };
@@ -204,7 +197,6 @@ export default function App() {
     }
   };
 
-  // --- GAME LOGIC ---
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
     initAudio();
@@ -229,7 +221,7 @@ export default function App() {
       id: Math.random().toString(36).substr(2, 9),
       x: -40,
       y: 20 + Math.random() * 40,
-      speed: 0.2 + score / 1000,
+      speed: 0.2 + score / 1500,
       isDragging: false,
     };
     setItems((prev) => [...prev, newItem]);
@@ -283,7 +275,9 @@ export default function App() {
       const timer = setInterval(() => {
         setTimeLeft((t) => {
           if (t <= 1) {
-            setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
+            const finalGameState =
+              score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER";
+            setGameState(finalGameState);
             sendData(score, score >= PASSING_SCORE ? "Đạt" : "Chưa đạt");
             return 0;
           }
@@ -360,7 +354,6 @@ export default function App() {
     setActiveZone(null);
   };
 
-  // --- RENDER ROUTING ---
   if (route === "#/results") {
     return (
       <div className="min-h-screen bg-[#0f172a] text-white p-6 md:p-12 overflow-y-auto">
@@ -413,7 +406,9 @@ export default function App() {
                   size={48}
                   className="animate-spin text-indigo-500 mb-4"
                 />
-                <p className="text-slate-400 font-bold">Đang tải...</p>
+                <p className="text-slate-400 font-bold">
+                  Đang kết nối dữ liệu...
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -424,7 +419,7 @@ export default function App() {
                       className="mx-auto text-slate-600 mb-4 opacity-20"
                     />
                     <p className="text-slate-500 font-bold italic">
-                      Chưa có dữ liệu nào được ghi nhận.
+                      Chưa có kết quả nào.
                     </p>
                   </div>
                 )}
@@ -511,7 +506,6 @@ export default function App() {
     );
   }
 
-  // --- ADMIN VIEW ---
   if (route === "#/admin") {
     if (!isAdminAuthenticated) {
       return (
@@ -698,7 +692,6 @@ export default function App() {
     );
   }
 
-  // --- MAIN GAME UI ---
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
       <div className="absolute inset-0 z-0 opacity-30">
