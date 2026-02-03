@@ -40,7 +40,7 @@ import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbz-V3kfZ9zhQPWYDmiP_Y3MnTYtHQx5AEBx94gX-vGIynrzNa-JzkqFqFxfTSVat22v/exec";
+  "https://script.google.com/macros/s/AKfycbwOlqvZClg3IB1SsNKMW0gwcvpezNoiOBKW-zi5KSlLwQwdtxSkJcXVcXfENGBEUqxt1A/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
 const ADMIN_PASSWORD = "123";
@@ -124,6 +124,29 @@ export default function App() {
     osc.stop(now + 0.3);
   };
 
+  // Hàm format ngày giờ chuẩn VN
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr || dateStr === "---") return dateStr;
+    try {
+      const date = new Date(dateStr);
+      // Kiểm tra nếu date là Invalid Date hoặc năm 1899 (lỗi Excel/Sheets)
+      if (isNaN(date.getTime()) || date.getFullYear() < 1970) {
+        // Nếu là string dạng Giờ:Phút:Giây thì giữ nguyên hoặc xử lý tiếp
+        return dateStr.length > 20 ? dateStr.substring(0, 19) : dateStr;
+      }
+      return date.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // --- API LOGIC ---
   const fetchDashboardData = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshingDashboard(true);
@@ -132,22 +155,44 @@ export default function App() {
       const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getResults`);
       if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
-      setLeaderboard(Array.isArray(data) ? data : []);
+
+      if (Array.isArray(data)) {
+        // 1. Lọc bỏ các dòng trống (không có tên)
+        const cleanData = data.filter(
+          (item) => item.name && item.name.trim() !== "",
+        );
+
+        // 2. Sắp xếp: Điểm cao lên đầu, nếu là "---" (đang thi) thì xếp theo thời gian mới nhất
+        const sortedData = cleanData.sort((a, b) => {
+          const scoreA = a.score === "---" ? -1 : Number(a.score);
+          const scoreB = b.score === "---" ? -1 : Number(b.score);
+
+          if (scoreA !== scoreB) {
+            return scoreB - scoreA;
+          }
+          // Nếu bằng điểm hoặc cùng đang thi, xếp theo thời gian (mới hơn lên trước)
+          return (
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        });
+
+        setLeaderboard(sortedData);
+      }
     } catch (e: any) {
-      console.error("CORS Error detected", e);
+      console.error("Fetch error", e);
       if (!silent) setDashboardError("Lỗi kết nối dữ liệu.");
     } finally {
       if (!silent) setIsRefreshingDashboard(false);
     }
   }, []);
 
-  // Tự động làm mới bảng điểm mỗi 10 giây khi đang ở trang Kết quả
+  // Tự động làm mới bảng điểm mỗi 3 giây khi đang ở trang Kết quả
   useEffect(() => {
     if (route === "#/results") {
-      fetchDashboardData(); // Lần đầu tiên vào trang
+      fetchDashboardData();
       const interval = setInterval(() => {
-        fetchDashboardData(true); // Tự động làm mới "ngầm"
-      }, 10000);
+        fetchDashboardData(true);
+      }, 3000); // 3 GIÂY CẬP NHẬT 1 LẦN
       return () => clearInterval(interval);
     }
   }, [route, fetchDashboardData]);
@@ -155,11 +200,8 @@ export default function App() {
   const sendData = async (finalScore: number | string, status: string) => {
     if (!GOOGLE_SCRIPT_URL) return;
     const payload = {
-      timestamp: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
+      // Gửi ISO string để Google Sheets và Frontend dễ xử lý đồng nhất
+      timestamp: new Date().toISOString(),
       name: playerInfo.name,
       className: playerInfo.className,
       score: finalScore,
@@ -183,10 +225,7 @@ export default function App() {
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
     initAudio();
-
-    // GỬI THÔNG TIN LÊN SHEETS NGAY LẬP TỨC KHI NHẤN BẮT ĐẦU
     sendData("---", "Đang thi");
-
     setScore(0);
     setLives(5);
     setTimeLeft(GAME_DURATION_SEC);
@@ -354,20 +393,12 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <p className="text-indigo-400 font-bold uppercase tracking-widest text-[10px]">
-                  ĐANG ĐỒNG BỘ TRỰC TUYẾN
+                  CẬP NHẬT SAU 3 GIÂY
                 </p>
               </div>
             </div>
           </div>
           <div className="flex gap-4">
-            {dashboardError && (
-              <button
-                onClick={() => setShowFixGuide(true)}
-                className="px-4 py-2 bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30 text-xs font-black animate-pulse flex items-center gap-2"
-              >
-                <WifiOff size={16} /> LỖI KẾT NỐI - CÁCH SỬA
-              </button>
-            )}
             <button
               onClick={() => (window.location.hash = "#/")}
               className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold hover:bg-white/10 flex items-center gap-2 transition-all"
@@ -399,9 +430,7 @@ export default function App() {
                   size={48}
                   className="animate-spin text-indigo-500 mb-4"
                 />
-                <p className="text-slate-400 font-bold">
-                  Đang tải dữ liệu từ máy chủ...
-                </p>
+                <p className="text-slate-400 font-bold">Đang tải dữ liệu...</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -412,21 +441,21 @@ export default function App() {
                       className="mx-auto text-slate-600 mb-4 opacity-20"
                     />
                     <p className="text-slate-500 font-bold italic">
-                      Chưa có lượt chơi nào được ghi nhận.
+                      Chưa có dữ liệu.
                     </p>
                   </div>
                 )}
                 {leaderboard.map((p, i) => (
                   <motion.div
+                    layout
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                    key={i}
+                    key={`${p.name}-${p.timestamp}`}
                     className={`bg-white/5 border border-white/5 p-6 rounded-3xl flex items-center justify-between hover:border-indigo-500/50 transition-all hover:bg-white/[0.08] group ${p.result === "Đang thi" ? "border-amber-500/30 bg-amber-500/5" : ""}`}
                   >
                     <div className="flex items-center gap-6">
                       <div
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl transition-transform group-hover:scale-110 ${p.result === "Đang thi" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl transition-transform group-hover:scale-110 ${i === 0 && p.result !== "Đang thi" ? "bg-amber-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
                       >
                         {" "}
                         {i + 1}{" "}
@@ -436,7 +465,7 @@ export default function App() {
                           <h3 className="text-xl font-black group-hover:text-indigo-400 transition-colors">
                             {p.name}
                           </h3>
-                          {p.result === "Đang thi" && (
+                          {p.result.includes("Đang thi") && (
                             <span className="bg-amber-500/20 text-amber-500 text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">
                               ĐANG THI
                             </span>
@@ -454,7 +483,7 @@ export default function App() {
                         {p.score}
                       </p>
                       <p className="text-[10px] text-slate-600 font-black uppercase tracking-tighter">
-                        {p.timestamp}
+                        {formatDateTime(p.timestamp)}
                       </p>
                     </div>
                   </motion.div>
@@ -492,74 +521,9 @@ export default function App() {
                   %
                 </p>
               </div>
-              <div className="pt-8 border-t border-white/5 space-y-4">
-                <div className="flex items-center gap-3 text-slate-500 text-xs font-bold uppercase">
-                  {" "}
-                  <Zap size={16} /> Tự động{" "}
-                </div>
-                <p className="text-slate-400 text-[11px] leading-relaxed italic">
-                  Bảng này tự động làm mới sau mỗi 10 giây. Thông tin thí sinh
-                  sẽ xuất hiện ngay khi họ nhấn nút "Bắt đầu chơi".
-                </p>
-              </div>
             </div>
           </section>
         </main>
-
-        <AnimatePresence>
-          {showFixGuide && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-slate-950/95 p-8 flex items-center justify-center"
-            >
-              <div className="max-w-3xl w-full bg-slate-900 border border-white/10 rounded-[40px] p-10 overflow-y-auto max-h-[90vh]">
-                <div className="flex justify-between mb-8">
-                  <h2 className="text-3xl font-black text-rose-400">
-                    SỬA LỖI CORS (GOOGLE SCRIPT)
-                  </h2>
-                  <button
-                    onClick={() => setShowFixGuide(false)}
-                    className="p-2 hover:bg-white/10 rounded-full"
-                  >
-                    {" "}
-                    <X size={32} />{" "}
-                  </button>
-                </div>
-                <p className="mb-6 text-slate-400">
-                  Bạn cần cập nhật mã Google Script để cho phép ứng dụng truy
-                  cập dữ liệu:
-                </p>
-                <pre className="bg-black/50 p-6 rounded-2xl text-green-400 text-xs overflow-x-auto mb-6 leading-relaxed">
-                  {`function doGet(e) {
-  var action = e.parameter.action;
-  if (action === 'getResults') {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var rows = sheet.getDataRange().getValues();
-    var results = [];
-    // Lấy từ dưới lên để thấy người mới nhất trước
-    for(var i=rows.length-1; i>=1; i--) {
-      results.push({
-        timestamp: rows[i][0], name: rows[i][1],
-        className: rows[i][2], score: rows[i][3], result: rows[i][4]
-      });
-    }
-    return ContentService.createTextOutput(JSON.stringify(results))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}`}
-                </pre>
-                <div className="bg-blue-500/10 p-6 rounded-2xl border border-blue-500/20 text-sm text-blue-200">
-                  <p>
-                    <b>Lưu ý:</b> Sau khi sửa, chọn <b>Triển khai mới</b>, đặt
-                    quyền là <b>Anyone</b> và copy URL mới.
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     );
   }
@@ -743,13 +707,6 @@ export default function App() {
                     </button>
                   </div>
                 ))}
-                {gameData.length === 0 && (
-                  <div className="text-center py-20">
-                    <p className="text-slate-400 font-bold italic">
-                      Chưa có dữ liệu nào.
-                    </p>
-                  </div>
-                )}
               </div>
             </section>
           </div>
@@ -1011,21 +968,19 @@ export default function App() {
                 {submitStatus === "SENDING" && (
                   <div className="flex items-center justify-center gap-2 text-indigo-500 font-bold">
                     {" "}
-                    <Loader2 className="animate-spin" /> Đang lưu kết
-                    quả...{" "}
+                    <Loader2 className="animate-spin" /> Đang cập nhật...{" "}
                   </div>
                 )}
                 {submitStatus === "SUCCESS" && (
                   <div className="text-green-500 font-bold">
                     {" "}
-                    <CheckCircle className="inline mr-2" /> Đã cập nhật thành
-                    công!{" "}
+                    <CheckCircle className="inline mr-2" /> Đã lưu kết quả!{" "}
                   </div>
                 )}
                 {submitStatus === "ERROR" && (
                   <div className="text-rose-500 font-bold">
                     {" "}
-                    Lỗi khi cập nhật kết quả.{" "}
+                    Lỗi khi nộp bài.{" "}
                   </div>
                 )}
               </div>
