@@ -40,14 +40,13 @@ import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbxVC3ke7EbmKokN5xTUG_dhIiEpSSjRYw1VXYhtMtxaByxpK6rOGpKBcqXS3RBimhYU/exec";
+  "https://script.google.com/macros/s/AKfycbyyQxuyMUsDZ_QyCFrcygdJ9l3VMz0yEzsxrrIif9rh_EHUHq-HJKj5YfCfbzT1NNZD/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
 const ADMIN_PASSWORD = "123";
 
 interface LeaderboardEntry {
   name: string;
-  className: string;
   score: number | string;
   timestamp: string;
   result: string;
@@ -81,7 +80,6 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isRefreshingDashboard, setIsRefreshingDashboard] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
-  const [showFixGuide, setShowFixGuide] = useState(false);
   const [newQuestion, setNewQuestion] = useState("");
   const [newCategory, setNewCategory] = useState<Category>(Category.CONTENT);
 
@@ -124,26 +122,24 @@ export default function App() {
     osc.stop(now + 0.3);
   };
 
-  // Hàm format ngày giờ chuẩn VN
-  const formatDateTime = (dateStr: string) => {
-    if (!dateStr || dateStr === "---") return dateStr;
+  // Hàm định dạng ngày giờ chuẩn Việt Nam
+  const formatVNTime = (dateInput: any) => {
+    if (!dateInput || dateInput === "---") return "Vừa xong";
     try {
-      const date = new Date(dateStr);
-      // Kiểm tra nếu date là Invalid Date hoặc năm 1899 (lỗi Excel/Sheets)
-      if (isNaN(date.getTime()) || date.getFullYear() < 1970) {
-        // Nếu là string dạng Giờ:Phút:Giây thì giữ nguyên hoặc xử lý tiếp
-        return dateStr.length > 20 ? dateStr.substring(0, 19) : dateStr;
-      }
-      return date.toLocaleString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime()) || d.getFullYear() < 1920)
+        return dateInput.toString().split("T")[0];
+      return (
+        d.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }) +
+        " " +
+        d.toLocaleDateString("vi-VN")
+      );
     } catch {
-      return dateStr;
+      return dateInput;
     }
   };
 
@@ -157,42 +153,31 @@ export default function App() {
       const data = await response.json();
 
       if (Array.isArray(data)) {
-        // 1. Lọc bỏ các dòng trống (không có tên)
-        const cleanData = data.filter(
-          (item) => item.name && item.name.trim() !== "",
-        );
-
-        // 2. Sắp xếp: Điểm cao lên đầu, nếu là "---" (đang thi) thì xếp theo thời gian mới nhất
-        const sortedData = cleanData.sort((a, b) => {
-          const scoreA = a.score === "---" ? -1 : Number(a.score);
-          const scoreB = b.score === "---" ? -1 : Number(b.score);
-
-          if (scoreA !== scoreB) {
-            return scoreB - scoreA;
-          }
-          // Nếu bằng điểm hoặc cùng đang thi, xếp theo thời gian (mới hơn lên trước)
-          return (
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          );
-        });
-
-        setLeaderboard(sortedData);
+        // Lọc bỏ dòng trống và sắp xếp: Điểm cao lên đầu, người chơi mới lên đầu
+        const processed = data
+          .filter((item) => item.name && item.name.trim() !== "")
+          .sort((a, b) => {
+            const scoreA = a.score === "---" ? -1 : Number(a.score);
+            const scoreB = b.score === "---" ? -1 : Number(b.score);
+            if (scoreA !== scoreB) return scoreB - scoreA;
+            return (
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+          });
+        setLeaderboard(processed);
       }
     } catch (e: any) {
       console.error("Fetch error", e);
-      if (!silent) setDashboardError("Lỗi kết nối dữ liệu.");
+      if (!silent) setDashboardError("Không thể kết nối máy chủ.");
     } finally {
       if (!silent) setIsRefreshingDashboard(false);
     }
   }, []);
 
-  // Tự động làm mới bảng điểm mỗi 3 giây khi đang ở trang Kết quả
   useEffect(() => {
     if (route === "#/results") {
       fetchDashboardData();
-      const interval = setInterval(() => {
-        fetchDashboardData(true);
-      }, 3000); // 3 GIÂY CẬP NHẬT 1 LẦN
+      const interval = setInterval(() => fetchDashboardData(true), 3000);
       return () => clearInterval(interval);
     }
   }, [route, fetchDashboardData]);
@@ -200,10 +185,8 @@ export default function App() {
   const sendData = async (finalScore: number | string, status: string) => {
     if (!GOOGLE_SCRIPT_URL) return;
     const payload = {
-      // Gửi ISO string để Google Sheets và Frontend dễ xử lý đồng nhất
       timestamp: new Date().toISOString(),
-      name: playerInfo.name,
-      className: playerInfo.className,
+      name: `${playerInfo.name} - ${playerInfo.className}`, // Ghép tên và lớp vào cột B cho khớp sheet của bạn
       score: finalScore,
       result: status,
     };
@@ -393,7 +376,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <p className="text-indigo-400 font-bold uppercase tracking-widest text-[10px]">
-                  CẬP NHẬT SAU 3 GIÂY
+                  ĐỒNG BỘ 3 GIÂY
                 </p>
               </div>
             </div>
@@ -430,7 +413,7 @@ export default function App() {
                   size={48}
                   className="animate-spin text-indigo-500 mb-4"
                 />
-                <p className="text-slate-400 font-bold">Đang tải dữ liệu...</p>
+                <p className="text-slate-400 font-bold">Đang tải...</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -441,7 +424,7 @@ export default function App() {
                       className="mx-auto text-slate-600 mb-4 opacity-20"
                     />
                     <p className="text-slate-500 font-bold italic">
-                      Chưa có dữ liệu.
+                      Chưa có dữ liệu nào được ghi nhận.
                     </p>
                   </div>
                 )}
@@ -455,7 +438,7 @@ export default function App() {
                   >
                     <div className="flex items-center gap-6">
                       <div
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl transition-transform group-hover:scale-110 ${i === 0 && p.result !== "Đang thi" ? "bg-amber-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl transition-transform group-hover:scale-110 ${i === 0 && p.score !== "---" ? "bg-amber-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
                       >
                         {" "}
                         {i + 1}{" "}
@@ -465,25 +448,25 @@ export default function App() {
                           <h3 className="text-xl font-black group-hover:text-indigo-400 transition-colors">
                             {p.name}
                           </h3>
-                          {p.result.includes("Đang thi") && (
-                            <span className="bg-amber-500/20 text-amber-500 text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">
+                          {p.result === "Đang thi" && (
+                            <span className="bg-amber-500/20 text-amber-500 text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse uppercase">
                               ĐANG THI
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
-                          {p.className}
+                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">
+                          {formatVNTime(p.timestamp)}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p
-                        className={`text-3xl font-black transition-transform ${p.result === "Đang thi" ? "text-amber-500" : "text-indigo-400"}`}
+                        className={`text-4xl font-black transition-transform ${p.score === "---" ? "text-amber-500" : "text-indigo-400"}`}
                       >
                         {p.score}
                       </p>
                       <p className="text-[10px] text-slate-600 font-black uppercase tracking-tighter">
-                        {formatDateTime(p.timestamp)}
+                        {p.result}
                       </p>
                     </div>
                   </motion.div>
