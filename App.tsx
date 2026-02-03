@@ -40,7 +40,7 @@ import { Feedback } from "./components/Feedback";
 
 // Cấu hình linh hoạt cho Google Script
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwOlqvZClg3IB1SsNKMW0gwcvpezNoiOBKW-zi5KSlLwQwdtxSkJcXVcXfENGBEUqxt1A/exec";
+  "https://script.google.com/macros/s/AKfycby43Lc_yqt4OuR-nSGyCDO0xLmDZmXmZ3_NCzV7gu8ckNi1ZVflnWhSlxgw_pfPX3tPVA/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
 const ADMIN_PASSWORD = "123";
