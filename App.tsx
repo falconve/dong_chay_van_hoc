@@ -41,7 +41,7 @@ import { Feedback } from "./components/Feedback";
 
 // CẬP NHẬT LINK GOOGLE SCRIPT MỚI CỦA BẠN
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbyFQNt5BJjpd3k-OI1Rd-OND_qRrJgHVZIhZlZ5rUikhs_09r1DU-u0HL31AvbjJaMt/exec";
+  "https://script.google.com/macros/s/AKfycbwj8yGQIsdVcWZCzpL9TA4Y4jDirNtGjwZBOYHKPVxw7p-BdmGXmcBRgl0PlqMtaw/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
 const ADMIN_PASSWORD = "123";
