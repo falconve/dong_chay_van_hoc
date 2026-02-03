@@ -89,7 +89,6 @@ export default function App() {
   const requestRef = useRef<number>(0);
   const deckRef = useRef<GameItemData[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  // Lưu ID của phiên chơi hiện tại
   const sessionIdRef = useRef<string>("");
 
   useEffect(() => {
@@ -179,10 +178,15 @@ export default function App() {
     }
   }, [route, fetchDashboardData]);
 
+  // Hàm gửi dữ liệu cốt lõi
   const sendData = async (finalScore: number | string, status: string) => {
-    if (!GOOGLE_SCRIPT_URL) return;
+    if (!GOOGLE_SCRIPT_URL || !sessionIdRef.current) return;
+
+    // Nếu là gửi điểm cuối cùng, hiện loading
+    if (status !== "Đang thi") setSubmitStatus("SENDING");
+
     const payload = {
-      sessionId: sessionIdRef.current, // Gửi ID phiên để script biết cần cập nhật dòng nào
+      sessionId: sessionIdRef.current,
       timestamp: new Date().toISOString(),
       name: `${playerInfo.name} - ${playerInfo.className}`,
       score: finalScore,
@@ -202,10 +206,17 @@ export default function App() {
     }
   };
 
+  // QUAN TRỌNG: Gửi điểm Real-time khi score thay đổi
+  useEffect(() => {
+    if (gameState === "PLAYING" && score > 0) {
+      // Gửi điểm thầm lặng lên server mỗi khi ghi điểm
+      sendData(score, "Đang thi");
+    }
+  }, [score, gameState]);
+
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
     initAudio();
-    // Tạo sessionId mới cho phiên chơi này
     sessionIdRef.current =
       "SID-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5);
     sendData("---", "Đang thi");
@@ -437,7 +448,7 @@ export default function App() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     key={`${p.name}-${p.timestamp}`}
-                    className={`bg-white/5 border border-white/5 p-6 rounded-3xl flex items-center justify-between hover:border-indigo-500/50 transition-all hover:bg-white/[0.08] group ${p.result === "Đang thi" ? "border-amber-500/30 bg-amber-500/5" : ""}`}
+                    className={`bg-white/5 border border-white/5 p-6 rounded-3xl flex items-center justify-between hover:border-indigo-500/50 transition-all hover:bg-white/[0.08] group ${p.result === "Đang thi" ? "border-amber-500/30 bg-amber-500/5" : "border-white/5"}`}
                   >
                     <div className="flex items-center gap-6">
                       <div
@@ -464,7 +475,7 @@ export default function App() {
                     </div>
                     <div className="text-right">
                       <p
-                        className={`text-4xl font-black transition-transform ${p.score === "---" ? "text-amber-500" : "text-indigo-400"}`}
+                        className={`text-4xl font-black transition-transform ${p.score === "---" || p.result === "Đang thi" ? "text-amber-500" : "text-indigo-400"}`}
                       >
                         {p.score}
                       </p>
@@ -905,22 +916,6 @@ export default function App() {
                 {" "}
                 <Play fill="currentColor" /> BẮT ĐẦU CHƠI{" "}
               </button>
-              <div className="flex gap-4 mt-6">
-                <button
-                  onClick={() => (window.location.hash = "#/results")}
-                  className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-slate-600 hover:bg-slate-200 transition-all"
-                >
-                  {" "}
-                  <BarChart3 className="inline mr-2" size={18} /> KẾT QUẢ{" "}
-                </button>
-                <button
-                  onClick={() => (window.location.hash = "#/admin")}
-                  className="p-4 bg-slate-100 rounded-2xl text-slate-400 hover:text-indigo-600 transition-all"
-                >
-                  {" "}
-                  <Settings size={20} />{" "}
-                </button>
-              </div>
             </motion.div>
           </motion.div>
         )}
