@@ -39,8 +39,9 @@ import { DropZone } from "./components/DropZone";
 import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
+// CẬP NHẬT LINK GOOGLE SCRIPT MỚI CỦA BẠN
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbyXCpUX2ECoiKlG7wie5ognIykyyFQNLDAiktzQT7LwX1iO2B-v58U0Hwb1P-SmB-WC/exec";
+  "https://script.google.com/macros/s/AKfycbyFQNt5BJjpd3k-OI1Rd-OND_qRrJgHVZIhZlZ5rUikhs_09r1DU-u0HL31AvbjJaMt/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 50;
 const ADMIN_PASSWORD = "123";
@@ -50,6 +51,7 @@ interface LeaderboardEntry {
   score: number | string;
   timestamp: string;
   result: string;
+  sessionId?: string;
 }
 
 export default function App() {
@@ -87,6 +89,8 @@ export default function App() {
   const requestRef = useRef<number>(0);
   const deckRef = useRef<GameItemData[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  // Lưu ID của phiên chơi hiện tại
+  const sessionIdRef = useRef<string>("");
 
   useEffect(() => {
     const handleHashChange = () => setRoute(window.location.hash || "#/");
@@ -178,6 +182,7 @@ export default function App() {
   const sendData = async (finalScore: number | string, status: string) => {
     if (!GOOGLE_SCRIPT_URL) return;
     const payload = {
+      sessionId: sessionIdRef.current, // Gửi ID phiên để script biết cần cập nhật dòng nào
       timestamp: new Date().toISOString(),
       name: `${playerInfo.name} - ${playerInfo.className}`,
       score: finalScore,
@@ -200,6 +205,9 @@ export default function App() {
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
     initAudio();
+    // Tạo sessionId mới cho phiên chơi này
+    sessionIdRef.current =
+      "SID-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5);
     sendData("---", "Đang thi");
     setScore(0);
     setLives(5);
