@@ -8,6 +8,7 @@ export interface GameItemData {
   id: string;
   text: string;
   category: Category;
+  isCorrect: boolean; // TRUE: ✅, FALSE: ❌
 }
 
 export interface ActiveItem extends GameItemData {

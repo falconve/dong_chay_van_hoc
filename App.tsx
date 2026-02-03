@@ -178,11 +178,9 @@ export default function App() {
     }
   }, [route, fetchDashboardData]);
 
-  // Hàm gửi dữ liệu cốt lõi
   const sendData = async (finalScore: number | string, status: string) => {
     if (!GOOGLE_SCRIPT_URL || !sessionIdRef.current) return;
 
-    // Nếu là gửi điểm cuối cùng, hiện loading
     if (status !== "Đang thi") setSubmitStatus("SENDING");
 
     const payload = {
@@ -206,10 +204,8 @@ export default function App() {
     }
   };
 
-  // QUAN TRỌNG: Gửi điểm Real-time khi score thay đổi
   useEffect(() => {
     if (gameState === "PLAYING" && score > 0) {
-      // Gửi điểm thầm lặng lên server mỗi khi ghi điểm
       sendData(score, "Đang thi");
     }
   }, [score, gameState]);
@@ -239,8 +235,8 @@ export default function App() {
       ...template,
       id: Math.random().toString(36).substr(2, 9),
       x: -40,
-      y: 20 + Math.random() * 40,
-      speed: 0.2 + score / 1500,
+      y: 15 + Math.random() * 50,
+      speed: 0.22 + score / 1800,
       isDragging: false,
     };
     setItems((prev) => [...prev, newItem]);
@@ -255,27 +251,15 @@ export default function App() {
       }
 
       setItems((prev) => {
-        let missed = false;
-        const next = prev
+        // Theo yêu cầu: thẻ trôi qua KHÔNG trừ mạng nữa
+        return prev
           .map((item) => {
             if (item.isDragging) return item;
             const nextX = item.x + item.speed;
-            if (nextX > 110) {
-              missed = true;
-              return null;
-            }
+            if (nextX > 110) return null; // Thẻ trôi mất, chỉ xóa khỏi mảng
             return { ...item, x: nextX };
           })
           .filter(Boolean) as ActiveItem[];
-
-        if (missed) {
-          setLives((l) => {
-            const nl = Math.max(0, l - 1);
-            if (nl < l) playSound("wrong");
-            return nl;
-          });
-        }
-        return next;
       });
       requestRef.current = requestAnimationFrame(updateGame);
     },
@@ -344,26 +328,56 @@ export default function App() {
     });
 
     if (droppedOn) {
-      const isCorrect = droppedOn.id === item.category;
-      playSound(isCorrect ? "correct" : "wrong");
-      setFeedbacks((f) => [
-        ...f,
-        {
-          id: Math.random().toString(),
-          type: isCorrect ? "correct" : "wrong",
-          x: info.point.x,
-          y: info.point.y,
-        },
-      ]);
-
-      if (isCorrect) {
-        setScore((s) => s + 10);
+      // LOGIC MỚI CHO THẺ KIẾN THỨC SAI (❌)
+      if (!item.isCorrect) {
+        // Kéo vào bất cứ ô nào cũng bị trừ mạng
+        playSound("wrong");
+        setLives((l) => Math.max(0, l - 1));
+        setFeedbacks((f) => [
+          ...f,
+          {
+            id: Math.random().toString(),
+            type: "wrong",
+            x: info.point.x,
+            y: info.point.y,
+            message: "Kiến thức sai!", // Bổ sung thông báo kiến thức sai
+          },
+        ]);
         setItems((prev) => prev.filter((i) => i.id !== id));
       } else {
-        setLives((l) => Math.max(0, l - 1));
-        setItems((prev) =>
-          prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i)),
-        );
+        // LOGIC CHO THẺ KIẾN THỨC ĐÚNG (✅)
+        const isCorrectZone = droppedOn.id === item.category;
+
+        if (isCorrectZone) {
+          playSound("correct");
+          setScore((s) => s + 10);
+          setFeedbacks((f) => [
+            ...f,
+            {
+              id: Math.random().toString(),
+              type: "correct",
+              x: info.point.x,
+              y: info.point.y,
+            },
+          ]);
+          setItems((prev) => prev.filter((i) => i.id !== id));
+        } else {
+          playSound("wrong");
+          setLives((l) => Math.max(0, l - 1));
+          setFeedbacks((f) => [
+            ...f,
+            {
+              id: Math.random().toString(),
+              type: "wrong",
+              x: info.point.x,
+              y: info.point.y,
+              message: "Sai vị trí!",
+            },
+          ]);
+          setItems((prev) =>
+            prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i)),
+          );
+        }
       }
     } else {
       setItems((prev) =>
@@ -650,6 +664,7 @@ export default function App() {
                         id: Math.random().toString(36).substr(2, 9),
                         text: newQuestion,
                         category: newCategory,
+                        isCorrect: true,
                       },
                     ]);
                     setNewQuestion("");
@@ -686,7 +701,7 @@ export default function App() {
                         {q.category}{" "}
                       </span>
                       <p className="text-sm font-semibold text-slate-700 leading-relaxed">
-                        {q.text}
+                        {q.text} {q.isCorrect ? "✅" : "❌"}
                       </p>
                     </div>
                     <button
@@ -916,6 +931,22 @@ export default function App() {
                 {" "}
                 <Play fill="currentColor" /> BẮT ĐẦU CHƠI{" "}
               </button>
+              <div className="flex gap-4 mt-6">
+                <button
+                  onClick={() => (window.location.hash = "#/results")}
+                  className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-slate-600 hover:bg-slate-200 transition-all"
+                >
+                  {" "}
+                  <BarChart3 className="inline mr-2" size={18} /> KẾT QUẢ{" "}
+                </button>
+                <button
+                  onClick={() => (window.location.hash = "#/admin")}
+                  className="p-4 bg-slate-100 rounded-2xl text-slate-400 hover:text-indigo-600 transition-all"
+                >
+                  {" "}
+                  <Settings size={20} />{" "}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
