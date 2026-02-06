@@ -25,10 +25,10 @@ export const Feedback: React.FC<FeedbackProps> = ({
       animate={{
         opacity: [0, 1, 1, 0],
         scale: [0.5, 1.2, 1],
-        y: -100, // Float up higher
-        x: isCorrect ? 0 : [0, -15, 15, -15, 15, 0], // Stronger shake if wrong
+        y: -120,
+        x: isCorrect ? 0 : [0, -15, 15, -15, 15, 0],
       }}
-      transition={{ duration: 0.8, ease: "easeOut" }}
+      transition={{ duration: 1.2, ease: "easeOut" }}
       onAnimationComplete={onComplete}
       style={{
         position: "fixed",
@@ -40,8 +40,8 @@ export const Feedback: React.FC<FeedbackProps> = ({
       }}
       className={`flex items-center gap-3 px-6 py-4 rounded-full shadow-2xl font-black text-2xl md:text-3xl backdrop-blur-md border-4 whitespace-nowrap ${
         isCorrect
-          ? "bg-green-100/90 text-green-600 border-green-500"
-          : "bg-red-100/90 text-red-600 border-red-500"
+          ? "bg-green-100/95 text-green-600 border-green-500"
+          : "bg-red-100/95 text-red-600 border-red-500"
       }`}
     >
       {isCorrect ? (

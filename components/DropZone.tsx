@@ -48,31 +48,21 @@ export const DropZone = forwardRef<HTMLDivElement, DropZoneProps>(
     return (
       <div
         ref={ref}
+        id={`zone-${category}`}
         className={`
         relative h-full w-full rounded-[2rem] border-4 transition-all duration-500 flex flex-col items-center justify-center
         bg-gradient-to-br backdrop-blur-xl overflow-hidden
         ${highlight ? theme.active + " scale-105" : theme.bg + " " + theme.border + " border-dashed"}
       `}
       >
-        {/* Hiệu ứng sóng chảy phía sau */}
-        {highlight && (
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 bg-white/20 animate-pulse" />
-            <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-white/20 to-transparent animate-bounce" />
-          </div>
-        )}
-
         <div
           className={`p-4 md:p-6 rounded-2xl shadow-sm mb-2 transition-transform duration-300 ${highlight ? "scale-110 " + theme.iconBg : "bg-white/50 text-slate-600"}`}
         >
-          <Icon
-            size={highlight ? 48 : 32}
-            className={highlight ? "animate-spin-slow" : ""}
-          />
+          <Icon size={highlight ? 48 : 32} />
         </div>
 
         <h3
-          className={`text-sm md:text-3xl font-black uppercase tracking-tighter md:tracking-widest text-center px-4 leading-none ${highlight ? "text-white" : theme.text}`}
+          className={`text-sm md:text-3xl font-black uppercase tracking-tighter text-center px-4 leading-none ${highlight ? "text-white" : theme.text}`}
         >
           {category}
         </h3>
@@ -80,10 +70,9 @@ export const DropZone = forwardRef<HTMLDivElement, DropZoneProps>(
         <p
           className={`mt-2 text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-60 ${highlight ? "text-white" : "text-slate-400"}`}
         >
-          {highlight ? "Thả ngay!" : "Phân loại vào đây"}
+          {highlight ? "Thả ngay!" : "Kéo vào đây"}
         </p>
 
-        {/* Trang trí góc */}
         <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-current opacity-20" />
         <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-current opacity-20" />
       </div>
