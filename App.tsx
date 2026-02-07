@@ -9,6 +9,7 @@ import {
   Trophy,
   Loader2,
   RotateCw,
+  BookOpen,
 } from "lucide-react";
 import {
   Category,
@@ -170,7 +171,7 @@ export default function App() {
         ...template,
         id: Math.random().toString(36).substr(2, 9),
         x: -30,
-        y: 8 + Math.random() * 32, // Khu vực xuất hiện thẻ gọn hơn
+        y: 12 + Math.random() * 28, // Khu vực xuất hiện thẻ trung tâm hơn
         speed: 0.25 + scoreRef.current / 6000,
         isDragging: false,
       },
@@ -360,25 +361,46 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Super Compact HUD for Landscape */}
+      {/* Adjusted HUD: Score, Lives & Timer - Lowered further for better visibility */}
       <AnimatePresence>
         {gameState === "PLAYING" && !isPortrait && (
           <motion.div
             initial={{ y: -50 }}
             animate={{ y: 0 }}
-            className="absolute top-2 left-4 right-4 z-40 flex justify-between items-center pointer-events-none"
+            className="absolute top-6 left-6 right-6 z-40 flex justify-between items-center pointer-events-none"
           >
             <div className="flex gap-2 pointer-events-auto">
-              <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md flex items-center gap-2 border border-white/50">
-                <Award className="text-indigo-600 w-4 h-4" />
-                <p className="text-sm font-black tabular-nums">{score}</p>
+              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg flex items-center gap-3 border border-white/60">
+                <div className="bg-indigo-50 p-1.5 rounded-lg">
+                  <Award className="text-indigo-600 w-4 h-4" />
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-[7px] font-black text-slate-400 uppercase leading-none">
+                    Điểm
+                  </p>
+                  <p className="text-sm font-black tabular-nums leading-none mt-0.5">
+                    {score}
+                  </p>
+                </div>
               </div>
-              <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md flex items-center gap-2 border border-white/50">
-                <Heart className="text-rose-500 w-4 h-4" fill="currentColor" />
-                <p className="text-sm font-black tabular-nums">{lives}</p>
+              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg flex items-center gap-3 border border-white/60">
+                <div className="bg-rose-50 p-1.5 rounded-lg">
+                  <Heart
+                    className="text-rose-500 w-4 h-4"
+                    fill="currentColor"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-[7px] font-black text-slate-400 uppercase leading-none">
+                    Mạng
+                  </p>
+                  <p className="text-sm font-black tabular-nums leading-none mt-0.5">
+                    {lives}
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="bg-slate-900/90 backdrop-blur-md px-4 py-1.5 rounded-xl text-white flex items-center gap-2 border border-white/10 shadow-lg pointer-events-auto">
+            <div className="bg-slate-900/90 backdrop-blur-md px-5 py-2 rounded-2xl text-white flex items-center gap-3 border border-white/10 shadow-xl pointer-events-auto">
               <Timer
                 className={`w-4 h-4 ${timeLeft < 30 ? "text-rose-400 animate-pulse" : "text-indigo-400"}`}
               />
@@ -391,7 +413,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Drop Zones - Optimized height for iPhone Landscape */}
+      {/* Drop Zones - Height remains at ~28-30% for iPhone landscape */}
       <div className="absolute bottom-0 left-0 right-0 h-[28%] md:h-[32%] z-20 px-4 pb-[env(safe-area-inset-bottom,16px)] pt-2 grid grid-cols-3 gap-3 bg-gradient-to-t from-white via-white/90 to-transparent">
         {Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => (
           <DropZone
@@ -597,20 +619,3 @@ export default function App() {
     </div>
   );
 }
-
-const BookOpen = ({ size, className }: { size: number; className: string }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="3"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-  </svg>
-);
