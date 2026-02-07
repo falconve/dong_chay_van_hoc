@@ -22,7 +22,7 @@ import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzYZG8EGd-2Ik6re_Ywu8k7k9MzMdqKh8GGTOpP02UlfdfDWAIBLQp4CTN8kG2zCEMV/exec";
+  "https://script.google.com/macros/s/AKfycbyIv--OmS7w-2iSsX439olJflcI5pGZAN5B2aoI6sWfax5rUkwNQdGc8SvNiytVyHoQ/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 80;
 
