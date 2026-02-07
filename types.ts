@@ -8,7 +8,7 @@ export interface GameItemData {
   id: string;
   text: string;
   category: Category;
-  isCorrect: boolean;
+  isCorrect: boolean; // TRUE: ✅, FALSE: ❌
 }
 
 export interface ActiveItem extends GameItemData {
@@ -23,4 +23,11 @@ export interface PlayerInfo {
   className: string;
 }
 
-export type GameState = "MENU" | "PLAYING" | "GAME_OVER" | "VICTORY";
+export type SubmitStatus = "IDLE" | "SENDING" | "SUCCESS" | "ERROR";
+
+export type GameState =
+  | "MENU"
+  | "PLAYING"
+  | "GAME_OVER"
+  | "VICTORY"
+  | "SETTINGS";
