@@ -21,6 +21,7 @@ import { DropZone } from "./components/DropZone";
 import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
+// URL CẬP NHẬT MỚI TỪ NGƯỜI DÙNG
 const GOOGLE_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwtnEJ0A_JHUOcdQZ1bPuvIeMp8SDIWvf2sKD3o1ADFxNuee8hdA3xHwCpc79mmqpk/exec";
 const GAME_DURATION_SEC = 180;
@@ -62,7 +63,7 @@ export default function App() {
   const scoreRef = useRef(0);
   const playerInfoRef = useRef<PlayerInfo>({ name: "", className: "" });
 
-  // Cập nhật ref để sendData luôn có dữ liệu mới nhất
+  // Luôn giữ thông tin người chơi mới nhất trong Ref để hàm sendData không bị lấy thông tin cũ
   useEffect(() => {
     playerInfoRef.current = playerInfo;
   }, [playerInfo]);
@@ -99,6 +100,7 @@ export default function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, [fetchDashboardData]);
 
+  // Gửi dữ liệu qua Google Script bằng phương thức text/plain để vượt rào CORS
   const sendData = useCallback(async (currentScore: number, status: string) => {
     const info = playerInfoRef.current;
     if (!sessionIdRef.current || !info.name) return;
@@ -108,25 +110,26 @@ export default function App() {
       name: `${info.name} - ${info.className}`,
       score: currentScore,
       result: status,
+      timestamp: new Date().toLocaleString("vi-VN"),
     };
 
     try {
+      // Sử dụng fetch với mode no-cors và content-type text/plain là cách ổn định nhất để POST lên GAS
       await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain" },
         body: JSON.stringify(payload),
       });
     } catch (e) {
-      console.error("Gửi dữ liệu lỗi:", e);
+      console.error("Lỗi gửi dữ liệu:", e);
     }
   }, []);
 
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
 
-    // Reset game
-    sessionIdRef.current = "SID-" + Date.now();
+    sessionIdRef.current = "SID-" + Math.random().toString(36).substring(2, 11);
     deckRef.current = [...DEFAULT_GAME_DATA].sort(() => Math.random() - 0.5);
     scoreRef.current = 0;
     setScore(0);
@@ -135,8 +138,10 @@ export default function App() {
     setItems([]);
     setGameState("PLAYING");
 
-    // Gửi dữ liệu ngay khi bắt đầu
-    sendData(0, "Đang thi");
+    // Gửi thông tin bắt đầu ngay lập tức
+    setTimeout(() => {
+      sendData(0, "Đang thi");
+    }, 100);
   };
 
   const spawnItem = useCallback(() => {
@@ -153,7 +158,7 @@ export default function App() {
         id: Math.random().toString(36).substr(2, 9),
         x: -30,
         y: 15 + Math.random() * 45,
-        speed: 0.22 + scoreRef.current / 10000,
+        speed: 0.22 + scoreRef.current / 5000,
         isDragging: false,
       },
     ]);
@@ -227,69 +232,84 @@ export default function App() {
     }
   }, [lives, gameState, sendData]);
 
-  // Tìm vùng thả bằng elementFromPoint - Độ chính xác tuyệt đối
-  const getZoneFromPoint = (x: number, y: number) => {
-    const element = document.elementFromPoint(x, y);
-    if (!element) return null;
+  // Kiểm tra va chạm giữa điểm kéo thả và các vùng DropZone
+  const getCategoryAtPoint = (x: number, y: number) => {
+    const zones = [
+      { cat: Category.CONTENT, id: `zone-${CATEGORY_SLUGS[Category.CONTENT]}` },
+      { cat: Category.ART, id: `zone-${CATEGORY_SLUGS[Category.ART]}` },
+      { cat: Category.LESSON, id: `zone-${CATEGORY_SLUGS[Category.LESSON]}` },
+    ];
 
-    const zoneElement = element.closest('[id^="zone-"]');
-    if (!zoneElement) return null;
-
-    const id = zoneElement.id;
-    if (id.includes("content")) return Category.CONTENT;
-    if (id.includes("art")) return Category.ART;
-    if (id.includes("lesson")) return Category.LESSON;
+    for (const zone of zones) {
+      const el = document.getElementById(zone.id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (
+          x >= rect.left &&
+          x <= rect.right &&
+          y >= rect.top &&
+          y <= rect.bottom
+        ) {
+          return zone.cat;
+        }
+      }
+    }
     return null;
   };
 
   const handleDragEnd = (id: string, info: any) => {
-    const droppedCategory = getZoneFromPoint(info.point.x, info.point.y);
+    // Toạ độ nhả chuột/tay từ Framer Motion (viewport-relative)
+    const dropX = info.point.x;
+    const dropY = info.point.y;
+    const droppedCategory = getCategoryAtPoint(dropX, dropY);
 
     setItems((prev) => {
       const item = prev.find((i) => i.id === id);
       if (!item) return prev;
 
       if (droppedCategory) {
+        // PHẢN HỒI KHI CÓ THẢ VÀO VÙNG CHỈ ĐỊNH
         if (!item.isCorrect) {
-          // Kiến thức sai
+          // TH1: Kiến thức sai
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
             {
               id: Math.random().toString(),
               type: "wrong",
-              x: info.point.x,
-              y: info.point.y,
+              x: dropX,
+              y: dropY,
               message: "Kiến thức sai!",
             },
           ]);
           return prev.filter((i) => i.id !== id);
         } else if (droppedCategory === item.category) {
-          // Đúng mục
+          // TH2: Thả đúng mục
           const newScore = scoreRef.current + 10;
           scoreRef.current = newScore;
           setScore(newScore);
+          // Cập nhật điểm lên Google Sheet ngay khi có thay đổi
           sendData(newScore, "Đang thi");
           setFeedbacks((f) => [
             ...f,
             {
               id: Math.random().toString(),
               type: "correct",
-              x: info.point.x,
-              y: info.point.y,
+              x: dropX,
+              y: dropY,
             },
           ]);
           return prev.filter((i) => i.id !== id);
         } else {
-          // Sai mục
+          // TH3: Thả sai mục
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
             {
               id: Math.random().toString(),
               type: "wrong",
-              x: info.point.x,
-              y: info.point.y,
+              x: dropX,
+              y: dropY,
               message: "Sai mục!",
             },
           ]);
@@ -306,13 +326,13 @@ export default function App() {
   };
 
   const handleDrag = (point: { x: number; y: number }) => {
-    const zone = getZoneFromPoint(point.x, point.y);
+    const zone = getCategoryAtPoint(point.x, point.y);
     setActiveZone(zone);
   };
 
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
-      {/* UI Lớp phủ game */}
+      {/* HUD: Score & Lives */}
       <AnimatePresence>
         {gameState === "PLAYING" && (
           <motion.div
@@ -361,7 +381,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Vùng thả DropZone */}
+      {/* Vùng thả DropZones */}
       <div className="absolute bottom-0 left-0 right-0 h-[38%] z-20 p-8 grid grid-cols-3 gap-8 bg-gradient-to-t from-white via-white/80 to-transparent">
         {Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => (
           <DropZone
@@ -373,7 +393,7 @@ export default function App() {
         ))}
       </div>
 
-      {/* Thẻ trôi nổi */}
+      {/* Thẻ kiến thức đang trôi */}
       <div className="absolute inset-0 z-10 overflow-hidden">
         {items.map((item) => (
           <FloatingCard
@@ -390,7 +410,7 @@ export default function App() {
         ))}
       </div>
 
-      {/* Phản hồi điểm số/sai lỗi */}
+      {/* Hiệu ứng Feedback (Correct/Wrong) */}
       <AnimatePresence>
         {feedbacks.map((f) => (
           <Feedback
@@ -403,7 +423,7 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      {/* Màn hình Menu/Kết quả */}
+      {/* Màn hình khởi đầu / Kết thúc */}
       <AnimatePresence>
         {gameState === "MENU" && (
           <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-6 text-center">
@@ -490,7 +510,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Bảng xếp hạng */}
+      {/* Bảng Vàng (Leaderboard) */}
       {route === "#/results" && (
         <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-6 md:p-12 overflow-y-auto">
           <header className="flex justify-between items-center mb-10">
@@ -524,14 +544,14 @@ export default function App() {
               <div className="flex flex-col items-center py-20 opacity-50">
                 <Loader2 size={48} className="animate-spin mb-4" />
                 <p className="font-bold uppercase tracking-widest text-xs">
-                  Đang tải bảng xếp hạng...
+                  Đang tải dữ liệu từ Google Sheets...
                 </p>
               </div>
             ) : leaderboard.length === 0 ? (
               <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5">
                 <Trophy size={48} className="mx-auto mb-4 text-slate-700" />
                 <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-                  Chưa có dữ liệu nào
+                  Chưa có kết quả nào được ghi nhận
                 </p>
               </div>
             ) : (

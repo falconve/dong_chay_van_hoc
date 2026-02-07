@@ -4,6 +4,7 @@ import { BookOpen, Palette, Lightbulb } from "lucide-react";
 
 interface DropZoneProps {
   category: Category;
+  slug: string;
   highlight: boolean;
 }
 
@@ -41,40 +42,41 @@ const THEMES = {
 };
 
 export const DropZone = forwardRef<HTMLDivElement, DropZoneProps>(
-  ({ category, highlight }, ref) => {
+  ({ category, slug, highlight }, ref) => {
     const Icon = ICONS[category];
     const theme = THEMES[category];
 
     return (
       <div
         ref={ref}
-        id={`zone-${category}`}
+        id={`zone-${slug}`}
         className={`
-        relative h-full w-full rounded-[2rem] border-4 transition-all duration-500 flex flex-col items-center justify-center
+        relative h-full w-full rounded-[2.5rem] border-4 transition-all duration-300 flex flex-col items-center justify-center
         bg-gradient-to-br backdrop-blur-xl overflow-hidden
         ${highlight ? theme.active + " scale-105" : theme.bg + " " + theme.border + " border-dashed"}
       `}
       >
         <div
-          className={`p-4 md:p-6 rounded-2xl shadow-sm mb-2 transition-transform duration-300 ${highlight ? "scale-110 " + theme.iconBg : "bg-white/50 text-slate-600"}`}
+          className={`p-4 rounded-2xl mb-4 transition-transform duration-300 ${highlight ? "scale-110 " + theme.iconBg : "bg-white/50 text-slate-400"}`}
         >
-          <Icon size={highlight ? 48 : 32} />
+          <Icon size={highlight ? 56 : 40} />
         </div>
 
         <h3
-          className={`text-sm md:text-3xl font-black uppercase tracking-tighter text-center px-4 leading-none ${highlight ? "text-white" : theme.text}`}
+          className={`text-sm md:text-3xl font-black uppercase tracking-tighter text-center leading-none ${highlight ? "text-indigo-900" : theme.text}`}
         >
           {category}
         </h3>
 
         <p
-          className={`mt-2 text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-60 ${highlight ? "text-white" : "text-slate-400"}`}
+          className={`mt-3 text-[10px] md:text-xs font-black uppercase tracking-widest opacity-40 ${highlight ? "text-indigo-800" : "text-slate-400"}`}
         >
-          {highlight ? "Thả ngay!" : "Kéo vào đây"}
+          {highlight ? "THẢ RA ĐỂ CHỌN!" : "KÉO THẺ VÀO ĐÂY"}
         </p>
 
-        <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-current opacity-20" />
-        <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-current opacity-20" />
+        {/* Trang trí góc */}
+        <div className="absolute top-6 left-6 w-4 h-4 border-t-2 border-l-2 border-current opacity-10" />
+        <div className="absolute bottom-6 right-6 w-4 h-4 border-b-2 border-r-2 border-current opacity-10" />
       </div>
     );
   },
