@@ -2,15 +2,30 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>Phân Loại Văn Học</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+      @keyframes spin-slow {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .animate-spin-slow {
+        animation: spin-slow 8s linear infinite;
+      }
       body {
         margin: 0;
         overflow: hidden;
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #0f172a;
+        background-color: #f8fafc;
+        touch-action: none;
       }
       ::-webkit-scrollbar {
         width: 6px;
@@ -21,6 +36,11 @@
       ::-webkit-scrollbar-thumb {
         background: rgba(156, 163, 175, 0.5);
         border-radius: 3px;
+      }
+      /* Hỗ trợ hiển thị trên thiết bị có tai thỏ */
+      #root {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
       }
     </style>
     <script type="importmap">
