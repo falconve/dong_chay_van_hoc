@@ -57,6 +57,7 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
 
+  const activeZoneRef = useRef<Category | null>(null);
   const lastSpawnTime = useRef(0);
   const requestRef = useRef<number>(0);
   const deckRef = useRef<GameItemData[]>([]);
@@ -65,7 +66,6 @@ export default function App() {
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResults(true);
     try {
-      // Xóa bỏ mode: 'cors' và headers thủ công để tránh lỗi Preflight
       const response = await fetch(
         `${GOOGLE_SCRIPT_URL}?action=getResults&t=${Date.now()}`,
       );
@@ -95,22 +95,25 @@ export default function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, [fetchDashboardData]);
 
-  const sendData = async (currentScore: number, status: string) => {
-    if (!sessionIdRef.current || !playerInfo.name) return;
-    const payload = {
-      sessionId: sessionIdRef.current,
-      name: `${playerInfo.name} - ${playerInfo.className}`,
-      score: currentScore,
-      result: status,
-    };
-    try {
-      await fetch(GOOGLE_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors", // Quan trọng: Google Script nhận tốt nhất qua no-cors
-        body: JSON.stringify(payload),
-      });
-    } catch (e) {}
-  };
+  const sendData = useCallback(
+    async (currentScore: number, status: string) => {
+      if (!sessionIdRef.current || !playerInfo.name) return;
+      const payload = {
+        sessionId: sessionIdRef.current,
+        name: `${playerInfo.name} - ${playerInfo.className}`,
+        score: currentScore,
+        result: status,
+      };
+      try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          body: JSON.stringify(payload),
+        });
+      } catch (e) {}
+    },
+    [playerInfo],
+  );
 
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
@@ -125,7 +128,10 @@ export default function App() {
   };
 
   const spawnItem = useCallback(() => {
-    if (deckRef.current.length === 0) return;
+    // Nếu hết bài, tự động nạp lại và xáo trộn
+    if (deckRef.current.length === 0) {
+      deckRef.current = [...gameData].sort(() => Math.random() - 0.5);
+    }
     const template = deckRef.current.pop();
     if (!template) return;
     setItems((prev) => [
@@ -135,11 +141,11 @@ export default function App() {
         id: Math.random().toString(36).substr(2, 9),
         x: -30,
         y: 15 + Math.random() * 45,
-        speed: 0.22 + score / 5000,
+        speed: 0.22 + score / 10000,
         isDragging: false,
       },
     ]);
-  }, [score]);
+  }, [gameData, score]);
 
   const updateGame = useCallback(
     (time: number) => {
@@ -179,9 +185,11 @@ export default function App() {
         () =>
           setTimeLeft((t) => {
             if (t <= 1) {
-              const res = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
+              // Fix: Access score state directly instead of using the setGameState updater which provides GameState string
+              // This resolves the errors where a string was being compared to a number and passed to sendData.
+              const finalStatus = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
+              sendData(score, finalStatus);
               setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
-              sendData(score, res);
               return 0;
             }
             return t - 1;
@@ -190,169 +198,105 @@ export default function App() {
       );
       return () => clearInterval(timer);
     }
-  }, [gameState, score]);
+    // Added score to dependencies to ensure the timer closure has access to the most recent score.
+  }, [gameState, score, sendData]);
 
   useEffect(() => {
     if (lives <= 0 && gameState === "PLAYING") {
-      const res = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
+      const finalStatus = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
       setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
-      sendData(score, res);
+      sendData(score, finalStatus);
     }
-  }, [lives, gameState, score]);
+  }, [lives, gameState, score, sendData]);
 
-  const handleDragEnd = (id: string, info: any) => {
-    const item = items.find((i) => i.id === id);
-    if (!item) return;
+  const handleDragEnd = useCallback(
+    (id: string, info: any) => {
+      setItems((prev) => {
+        const item = prev.find((i) => i.id === id);
+        if (!item) return prev;
+
+        // Sử dụng ref để xác định vùng thả vì nó luôn cập nhật tức thì
+        const droppedCategory = activeZoneRef.current;
+
+        if (droppedCategory) {
+          if (!item.isCorrect) {
+            // Trường hợp: Thả một kiến thức SAI vào bất kỳ ô nào
+            setLives((l) => Math.max(0, l - 1));
+            setFeedbacks((f) => [
+              ...f,
+              {
+                id: Math.random().toString(),
+                type: "wrong",
+                x: info.point.x,
+                y: info.point.y,
+                message: "Kiến thức sai!",
+              },
+            ]);
+            return prev.filter((i) => i.id !== id);
+          } else if (droppedCategory === item.category) {
+            // Trường hợp: Thả đúng kiến thức vào đúng ô
+            setScore((s) => {
+              const newScore = s + 10;
+              sendData(newScore, "Đang thi");
+              return newScore;
+            });
+            setFeedbacks((f) => [
+              ...f,
+              {
+                id: Math.random().toString(),
+                type: "correct",
+                x: info.point.x,
+                y: info.point.y,
+              },
+            ]);
+            return prev.filter((i) => i.id !== id);
+          } else {
+            // Trường hợp: Thả đúng kiến thức nhưng SAI ô phân loại
+            setLives((l) => Math.max(0, l - 1));
+            setFeedbacks((f) => [
+              ...f,
+              {
+                id: Math.random().toString(),
+                type: "wrong",
+                x: info.point.x,
+                y: info.point.y,
+                message: "Sai mục!",
+              },
+            ]);
+            return prev.map((i) =>
+              i.id === id ? { ...i, isDragging: false } : i,
+            );
+          }
+        }
+
+        // Nếu không thả vào ô nào, chỉ cần reset trạng thái kéo
+        return prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i));
+      });
+
+      activeZoneRef.current = null;
+      setActiveZone(null);
+    },
+    [sendData],
+  );
+
+  const handleDrag = useCallback((point: { x: number; y: number }) => {
     const zones = Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => ({
-      category: cat as Category,
+      cat: cat as Category,
       rect: document.getElementById(`zone-${slug}`)?.getBoundingClientRect(),
     }));
-    const droppedOn = zones.find(
+    const found = zones.find(
       (z) =>
         z.rect &&
-        info.point.x >= z.rect.left &&
-        info.point.x <= z.rect.right &&
-        info.point.y >= z.rect.top &&
-        info.point.y <= z.rect.bottom,
+        point.x >= z.rect.left &&
+        point.x <= z.rect.right &&
+        point.y >= z.rect.top &&
+        point.y <= z.rect.bottom,
     );
 
-    if (droppedOn) {
-      if (!item.isCorrect) {
-        setLives((l) => Math.max(0, l - 1));
-        setFeedbacks((f) => [
-          ...f,
-          {
-            id: Math.random().toString(),
-            type: "wrong",
-            x: info.point.x,
-            y: info.point.y,
-            message: "Kiến thức sai!",
-          },
-        ]);
-        setItems((prev) => prev.filter((i) => i.id !== id));
-      } else if (droppedOn.category === item.category) {
-        const newScore = score + 10;
-        setScore(newScore);
-        setFeedbacks((f) => [
-          ...f,
-          {
-            id: Math.random().toString(),
-            type: "correct",
-            x: info.point.x,
-            y: info.point.y,
-          },
-        ]);
-        setItems((prev) => prev.filter((i) => i.id !== id));
-        sendData(newScore, "Đang thi");
-      } else {
-        setLives((l) => Math.max(0, l - 1));
-        setFeedbacks((f) => [
-          ...f,
-          {
-            id: Math.random().toString(),
-            type: "wrong",
-            x: info.point.x,
-            y: info.point.y,
-            message: "Sai mục!",
-          },
-        ]);
-        setItems((prev) =>
-          prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i)),
-        );
-      }
-    } else {
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i)),
-      );
-    }
-    setActiveZone(null);
-  };
-
-  if (route === "#/results") {
-    return (
-      <div className="min-h-screen bg-[#020617] text-white p-6 md:p-12 overflow-y-auto">
-        <header className="flex justify-between items-center mb-10">
-          <h1 className="text-3xl font-black flex items-center gap-4">
-            <Trophy className="text-amber-400" /> BẢNG VÀNG
-          </h1>
-          <div className="flex gap-4">
-            <button
-              onClick={() => (window.location.hash = "#/")}
-              className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10"
-            >
-              {" "}
-              <ArrowLeft size={18} /> QUAY LẠI{" "}
-            </button>
-            <button
-              onClick={() => fetchDashboardData()}
-              disabled={isLoadingResults}
-              className={`p-3 bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all ${isLoadingResults ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              {isLoadingResults ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <RefreshCw size={20} />
-              )}
-            </button>
-          </div>
-        </header>
-
-        <div className="max-w-4xl mx-auto space-y-4">
-          {isLoadingResults && leaderboard.length === 0 ? (
-            <div className="flex flex-col items-center py-20 opacity-50">
-              <Loader2 size={48} className="animate-spin mb-4" />
-              <p className="font-bold uppercase tracking-widest text-xs">
-                Đang tải bảng xếp hạng...
-              </p>
-            </div>
-          ) : leaderboard.length === 0 ? (
-            <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5">
-              <Trophy size={48} className="mx-auto mb-4 text-slate-700" />
-              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-                Chưa có dữ liệu nào
-              </p>
-            </div>
-          ) : (
-            leaderboard.map((p, i) => (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                key={i}
-                className="bg-white/5 p-6 rounded-3xl flex justify-between items-center border border-white/5 group hover:bg-white/[0.08] transition-all"
-              >
-                <div className="flex items-center gap-6">
-                  <span
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl ${i === 0 ? "bg-amber-400 text-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.4)]" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-orange-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
-                  >
-                    {i + 1}
-                  </span>
-                  <div>
-                    <h3 className="text-xl font-black text-slate-200 group-hover:text-white transition-colors">
-                      {p.name}
-                    </h3>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-                      {p.timestamp}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-4xl font-black text-indigo-400 tabular-nums">
-                    {p.score}
-                  </p>
-                  <p
-                    className={`text-[10px] uppercase font-black px-3 py-1 rounded-full mt-2 inline-block ${p.result === "Đang thi" ? "text-amber-500 bg-amber-500/10 animate-pulse" : p.result === "Đạt" ? "text-green-500 bg-green-500/10" : "text-slate-500 bg-white/5"}`}
-                  >
-                    {p.result}
-                  </p>
-                </div>
-              </motion.div>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  }
+    const newZone = found ? found.cat : null;
+    activeZoneRef.current = newZone;
+    setActiveZone(newZone);
+  }, []);
 
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
@@ -425,25 +369,7 @@ export default function App() {
                 p.map((i) => (i.id === id ? { ...i, isDragging: true } : i)),
               )
             }
-            onDrag={(point) => {
-              const zones = Object.entries(CATEGORY_SLUGS).map(
-                ([cat, slug]) => ({
-                  cat: cat as Category,
-                  rect: document
-                    .getElementById(`zone-${slug}`)
-                    ?.getBoundingClientRect(),
-                }),
-              );
-              const found = zones.find(
-                (z) =>
-                  z.rect &&
-                  point.x >= z.rect.left &&
-                  point.x <= z.rect.right &&
-                  point.y >= z.rect.top &&
-                  point.y <= z.rect.bottom,
-              );
-              setActiveZone(found ? found.cat : null);
-            }}
+            onDrag={handleDrag}
             onDragEnd={handleDragEnd}
           />
         ))}
@@ -546,6 +472,90 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {route === "#/results" && (
+        <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-6 md:p-12 overflow-y-auto">
+          <header className="flex justify-between items-center mb-10">
+            <h1 className="text-3xl font-black flex items-center gap-4">
+              <Trophy className="text-amber-400" /> BẢNG VÀNG
+            </h1>
+            <div className="flex gap-4">
+              <button
+                onClick={() => (window.location.hash = "#/")}
+                className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10"
+              >
+                {" "}
+                <ArrowLeft size={18} /> QUAY LẠI{" "}
+              </button>
+              <button
+                onClick={() => fetchDashboardData()}
+                disabled={isLoadingResults}
+                className={`p-3 bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all ${isLoadingResults ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                {isLoadingResults ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={20} />
+                )}
+              </button>
+            </div>
+          </header>
+
+          <div className="max-w-4xl mx-auto space-y-4">
+            {isLoadingResults && leaderboard.length === 0 ? (
+              <div className="flex flex-col items-center py-20 opacity-50">
+                <Loader2 size={48} className="animate-spin mb-4" />
+                <p className="font-bold uppercase tracking-widest text-xs">
+                  Đang tải bảng xếp hạng...
+                </p>
+              </div>
+            ) : leaderboard.length === 0 ? (
+              <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5">
+                <Trophy size={48} className="mx-auto mb-4 text-slate-700" />
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+                  Chưa có dữ liệu nào
+                </p>
+              </div>
+            ) : (
+              leaderboard.map((p, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  key={i}
+                  className="bg-white/5 p-6 rounded-3xl flex justify-between items-center border border-white/5 group hover:bg-white/[0.08] transition-all"
+                >
+                  <div className="flex items-center gap-6">
+                    <span
+                      className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl ${i === 0 ? "bg-amber-400 text-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.4)]" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-orange-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                    >
+                      {i + 1}
+                    </span>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-200 group-hover:text-white transition-colors">
+                        {p.name}
+                      </h3>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                        {p.timestamp}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-4xl font-black text-indigo-400 tabular-nums">
+                      {p.score}
+                    </p>
+                    <p
+                      className={`text-[10px] uppercase font-black px-3 py-1 rounded-full mt-2 inline-block ${p.result === "Đang thi" ? "text-amber-500 bg-amber-500/10 animate-pulse" : p.result === "Đạt" ? "text-green-500 bg-green-500/10" : "text-slate-500 bg-white/5"}`}
+                    >
+                      {p.result}
+                    </p>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
