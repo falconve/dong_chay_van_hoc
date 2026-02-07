@@ -23,7 +23,7 @@ import { Feedback } from "./components/Feedback";
 
 // URL CẬP NHẬT MỚI TỪ NGƯỜI DÙNG
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwtnEJ0A_JHUOcdQZ1bPuvIeMp8SDIWvf2sKD3o1ADFxNuee8hdA3xHwCpc79mmqpk/exec";
+  "https://script.google.com/macros/s/AKfycbwzjxKgbB_wouQS2Ak4jJg3x2HeRNs0I3UzVH1W6PCfkw_-Tbl7ljpEQ3kY7iN9sO5_/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 80;
 
@@ -63,12 +63,12 @@ export default function App() {
   const scoreRef = useRef(0);
   const playerInfoRef = useRef<PlayerInfo>({ name: "", className: "" });
 
-  // Luôn giữ thông tin người chơi mới nhất trong Ref để hàm sendData không bị lấy thông tin cũ
   useEffect(() => {
     playerInfoRef.current = playerInfo;
   }, [playerInfo]);
 
   const fetchDashboardData = useCallback(async () => {
+    if (route !== "#/results" && route !== "/results") return;
     setIsLoadingResults(true);
     try {
       const response = await fetch(
@@ -76,48 +76,58 @@ export default function App() {
       );
       const data = await response.json();
       if (Array.isArray(data)) {
-        setLeaderboard(
-          data
-            .filter((i) => i.name)
-            .sort((a, b) => Number(b.score) - Number(a.score)),
-        );
+        // Lọc các hàng trống và sắp xếp theo điểm cao nhất
+        const cleanData = data
+          .filter((i) => i.name || i["Họ Tên"])
+          .map((i) => ({
+            name: i.name || i["Họ Tên"],
+            score: i.score || i["Điểm"],
+            timestamp: i.timestamp || i["Cập nhật lúc"],
+            result: i.result || i["Trạng thái"],
+          }))
+          .sort((a, b) => Number(b.score) - Number(a.score));
+        setLeaderboard(cleanData);
       }
     } catch (e) {
-      console.error("Fetch error:", e);
+      console.error("Lỗi tải bảng xếp hạng:", e);
     } finally {
       setIsLoadingResults(false);
     }
-  }, []);
+  }, [route]);
+
+  // Tự động làm mới bảng xếp hạng sau mỗi 10 giây nếu đang ở trang kết quả
+  useEffect(() => {
+    if (route === "#/results") {
+      fetchDashboardData();
+      const interval = setInterval(fetchDashboardData, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [route, fetchDashboardData]);
 
   useEffect(() => {
-    const handleHashChange = () => {
-      const newRoute = window.location.hash || "#/";
-      setRoute(newRoute);
-      if (newRoute === "#/results") fetchDashboardData();
-    };
+    const handleHashChange = () => setRoute(window.location.hash || "#/");
     window.addEventListener("hashchange", handleHashChange);
-    if (window.location.hash === "#/results") fetchDashboardData();
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [fetchDashboardData]);
+  }, []);
 
-  // Gửi dữ liệu qua Google Script bằng phương thức text/plain để vượt rào CORS
+  // HÀM QUAN TRỌNG: Gửi dữ liệu khớp với tiêu đề cột Google Sheet
   const sendData = useCallback(async (currentScore: number, status: string) => {
     const info = playerInfoRef.current;
     if (!sessionIdRef.current || !info.name) return;
 
+    // Khớp 100% với tiêu đề cột trong ảnh của bạn
     const payload = {
-      sessionId: sessionIdRef.current,
-      name: `${info.name} - ${info.className}`,
-      score: currentScore,
-      result: status,
-      timestamp: new Date().toLocaleString("vi-VN"),
+      SessionID: sessionIdRef.current,
+      "Họ Tên": `${info.name} - ${info.className}`,
+      Điểm: currentScore,
+      "Cập nhật lúc": new Date().toLocaleString("vi-VN"),
+      "Trạng thái": status,
     };
 
     try {
-      // Sử dụng fetch với mode no-cors và content-type text/plain là cách ổn định nhất để POST lên GAS
       await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
-        mode: "no-cors",
+        mode: "no-cors", // Bắt buộc để tránh lỗi CORS
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify(payload),
       });
@@ -129,7 +139,8 @@ export default function App() {
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
 
-    sessionIdRef.current = "SID-" + Math.random().toString(36).substring(2, 11);
+    sessionIdRef.current =
+      "S-" + Math.random().toString(36).substring(2, 7).toUpperCase();
     deckRef.current = [...DEFAULT_GAME_DATA].sort(() => Math.random() - 0.5);
     scoreRef.current = 0;
     setScore(0);
@@ -138,10 +149,8 @@ export default function App() {
     setItems([]);
     setGameState("PLAYING");
 
-    // Gửi thông tin bắt đầu ngay lập tức
-    setTimeout(() => {
-      sendData(0, "Đang thi");
-    }, 100);
+    // Ghi nhận trạng thái đang thi ngay lập tức
+    sendData(0, "Đang thi");
   };
 
   const spawnItem = useCallback(() => {
@@ -158,7 +167,7 @@ export default function App() {
         id: Math.random().toString(36).substr(2, 9),
         x: -30,
         y: 15 + Math.random() * 45,
-        speed: 0.22 + scoreRef.current / 5000,
+        speed: 0.22 + scoreRef.current / 4000,
         isDragging: false,
       },
     ]);
@@ -232,7 +241,6 @@ export default function App() {
     }
   }, [lives, gameState, sendData]);
 
-  // Kiểm tra va chạm giữa điểm kéo thả và các vùng DropZone
   const getCategoryAtPoint = (x: number, y: number) => {
     const zones = [
       { cat: Category.CONTENT, id: `zone-${CATEGORY_SLUGS[Category.CONTENT]}` },
@@ -258,7 +266,6 @@ export default function App() {
   };
 
   const handleDragEnd = (id: string, info: any) => {
-    // Toạ độ nhả chuột/tay từ Framer Motion (viewport-relative)
     const dropX = info.point.x;
     const dropY = info.point.y;
     const droppedCategory = getCategoryAtPoint(dropX, dropY);
@@ -268,9 +275,7 @@ export default function App() {
       if (!item) return prev;
 
       if (droppedCategory) {
-        // PHẢN HỒI KHI CÓ THẢ VÀO VÙNG CHỈ ĐỊNH
         if (!item.isCorrect) {
-          // TH1: Kiến thức sai
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
@@ -284,12 +289,13 @@ export default function App() {
           ]);
           return prev.filter((i) => i.id !== id);
         } else if (droppedCategory === item.category) {
-          // TH2: Thả đúng mục
           const newScore = scoreRef.current + 10;
           scoreRef.current = newScore;
           setScore(newScore);
-          // Cập nhật điểm lên Google Sheet ngay khi có thay đổi
+
+          // CẬP NHẬT THỜI GIAN THỰC
           sendData(newScore, "Đang thi");
+
           setFeedbacks((f) => [
             ...f,
             {
@@ -301,7 +307,6 @@ export default function App() {
           ]);
           return prev.filter((i) => i.id !== id);
         } else {
-          // TH3: Thả sai mục
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
@@ -318,7 +323,6 @@ export default function App() {
           );
         }
       }
-
       return prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i));
     });
 
@@ -332,7 +336,7 @@ export default function App() {
 
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
-      {/* HUD: Score & Lives */}
+      {/* Top HUD */}
       <AnimatePresence>
         {gameState === "PLAYING" && (
           <motion.div
@@ -381,7 +385,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Vùng thả DropZones */}
       <div className="absolute bottom-0 left-0 right-0 h-[38%] z-20 p-8 grid grid-cols-3 gap-8 bg-gradient-to-t from-white via-white/80 to-transparent">
         {Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => (
           <DropZone
@@ -393,7 +396,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* Thẻ kiến thức đang trôi */}
       <div className="absolute inset-0 z-10 overflow-hidden">
         {items.map((item) => (
           <FloatingCard
@@ -410,7 +412,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* Hiệu ứng Feedback (Correct/Wrong) */}
       <AnimatePresence>
         {feedbacks.map((f) => (
           <Feedback
@@ -423,7 +424,7 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      {/* Màn hình khởi đầu / Kết thúc */}
+      {/* Màn hình MENU */}
       <AnimatePresence>
         {gameState === "MENU" && (
           <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-6 text-center">
@@ -432,7 +433,7 @@ export default function App() {
               animate={{ scale: 1, opacity: 1 }}
               className="bg-white p-12 rounded-[40px] shadow-2xl max-w-lg w-full border border-white"
             >
-              <h1 className="text-6xl font-black text-slate-800 mb-2 tracking-tighter">
+              <h1 className="text-6xl font-black text-slate-800 mb-2 tracking-tighter italic">
                 Dòng Chảy
               </h1>
               <p className="text-slate-500 font-bold mb-10 uppercase tracking-widest text-[10px]">
@@ -446,7 +447,7 @@ export default function App() {
                   onChange={(e) =>
                     setPlayerInfo((p) => ({ ...p, name: e.target.value }))
                   }
-                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all shadow-inner"
                 />
                 <input
                   type="text"
@@ -455,7 +456,7 @@ export default function App() {
                   onChange={(e) =>
                     setPlayerInfo((p) => ({ ...p, className: e.target.value }))
                   }
-                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all shadow-inner"
                 />
               </div>
               <button
@@ -490,11 +491,11 @@ export default function App() {
               </div>
               <div className="mb-8 font-black uppercase tracking-widest text-xs">
                 {score >= PASSING_SCORE ? (
-                  <span className="text-green-600 bg-green-50 px-8 py-3 rounded-2xl border border-green-200 shadow-sm">
+                  <span className="text-green-600 bg-green-50 px-8 py-3 rounded-2xl border border-green-200 shadow-sm font-bold">
                     ĐẠT YÊU CẦU
                   </span>
                 ) : (
-                  <span className="text-rose-500 bg-rose-50 px-8 py-3 rounded-2xl border border-rose-200 shadow-sm">
+                  <span className="text-rose-500 bg-rose-50 px-8 py-3 rounded-2xl border border-rose-200 shadow-sm font-bold">
                     CHƯA ĐẠT
                   </span>
                 )}
@@ -510,10 +511,10 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Bảng Vàng (Leaderboard) */}
+      {/* Bảng Xếp Hạng */}
       {route === "#/results" && (
         <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-6 md:p-12 overflow-y-auto">
-          <header className="flex justify-between items-center mb-10">
+          <header className="flex justify-between items-center mb-10 max-w-4xl mx-auto">
             <h1 className="text-3xl font-black flex items-center gap-4">
               <Trophy className="text-amber-400" /> BẢNG VÀNG
             </h1>
@@ -539,26 +540,19 @@ export default function App() {
             </div>
           </header>
 
-          <div className="max-w-4xl mx-auto space-y-4">
-            {isLoadingResults && leaderboard.length === 0 ? (
-              <div className="flex flex-col items-center py-20 opacity-50">
-                <Loader2 size={48} className="animate-spin mb-4" />
-                <p className="font-bold uppercase tracking-widest text-xs">
-                  Đang tải dữ liệu từ Google Sheets...
-                </p>
-              </div>
-            ) : leaderboard.length === 0 ? (
+          <div className="max-w-4xl mx-auto space-y-4 pb-20">
+            {leaderboard.length === 0 && !isLoadingResults ? (
               <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5">
                 <Trophy size={48} className="mx-auto mb-4 text-slate-700" />
                 <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-                  Chưa có kết quả nào được ghi nhận
+                  Chưa có kết quả nào. Hãy là người đầu tiên!
                 </p>
               </div>
             ) : (
               leaderboard.map((p, i) => (
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
                   key={i}
                   className="bg-white/5 p-6 rounded-3xl flex justify-between items-center border border-white/5 group hover:bg-white/[0.08] transition-all"
@@ -583,13 +577,18 @@ export default function App() {
                       {p.score}
                     </p>
                     <p
-                      className={`text-[10px] uppercase font-black px-3 py-1 rounded-full mt-2 inline-block ${p.result === "Đang thi" ? "text-amber-500 bg-amber-500/10 animate-pulse" : p.result === "Đạt" ? "text-green-500 bg-green-500/10" : "text-slate-500 bg-white/5"}`}
+                      className={`text-[10px] uppercase font-black px-3 py-1 rounded-full mt-2 inline-block ${p.result === "Đang thi" ? "text-amber-500 bg-amber-500/10 animate-pulse" : p.result === "Đạt" ? "text-green-500 bg-green-500/10 border border-green-500/20" : "text-slate-400 bg-white/5"}`}
                     >
                       {p.result}
                     </p>
                   </div>
                 </motion.div>
               ))
+            )}
+            {isLoadingResults && leaderboard.length === 0 && (
+              <div className="flex justify-center py-10 opacity-30">
+                <Loader2 size={40} className="animate-spin" />
+              </div>
             )}
           </div>
         </div>
