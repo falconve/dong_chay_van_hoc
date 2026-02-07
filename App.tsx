@@ -27,6 +27,7 @@ const GOOGLE_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwzjxKgbB_wouQS2Ak4jJg3x2HeRNs0I3UzVH1W6PCfkw_-Tbl7ljpEQ3kY7iN9sO5_/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 80;
+const MAX_SCORE = 100;
 
 const CATEGORY_SLUGS = {
   [Category.CONTENT]: "content",
@@ -143,6 +144,15 @@ export default function App() {
     }
   }, []);
 
+  const finishGame = useCallback(
+    (finalScore: number) => {
+      const finalStatus = finalScore >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
+      sendData(finalScore, finalStatus);
+      setGameState(finalScore >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
+    },
+    [sendData],
+  );
+
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
 
@@ -159,9 +169,8 @@ export default function App() {
   };
 
   const spawnItem = useCallback(() => {
-    if (deckRef.current.length === 0) {
-      deckRef.current = [...DEFAULT_GAME_DATA].sort(() => Math.random() - 0.5);
-    }
+    if (deckRef.current.length === 0) return; // Không lặp lại câu hỏi
+
     const template = deckRef.current.pop();
     if (!template) return;
 
@@ -170,8 +179,8 @@ export default function App() {
       {
         ...template,
         id: Math.random().toString(36).substr(2, 9),
-        x: -30,
-        y: 12 + Math.random() * 28, // Khu vực xuất hiện thẻ trung tâm hơn
+        x: -35,
+        y: 15 + Math.random() * 25,
         speed: 0.25 + scoreRef.current / 6000,
         isDragging: false,
       },
@@ -187,24 +196,34 @@ export default function App() {
         lastSpawnTime.current = time;
       }
 
-      setItems(
-        (prev) =>
-          prev
-            .map((item) => {
-              if (item.isDragging) return item;
-              const nextX = item.x + item.speed;
-              if (nextX > 115) {
-                if (item.isCorrect) setLives((l) => Math.max(0, l - 1));
-                return null;
-              }
-              return { ...item, x: nextX };
-            })
-            .filter(Boolean) as ActiveItem[],
-      );
+      setItems((prev) => {
+        const updated = prev
+          .map((item) => {
+            if (item.isDragging) return item;
+            const nextX = item.x + item.speed;
+            if (nextX > 115) {
+              // Thẻ trôi qua không bị trừ điểm (quy tắc mới)
+              return null;
+            }
+            return { ...item, x: nextX };
+          })
+          .filter(Boolean) as ActiveItem[];
+
+        // Nếu hết thẻ trong bộ bài và không còn thẻ trên màn hình -> Kết thúc
+        if (
+          deckRef.current.length === 0 &&
+          updated.length === 0 &&
+          gameState === "PLAYING"
+        ) {
+          setTimeout(() => finishGame(scoreRef.current), 500);
+        }
+
+        return updated;
+      });
 
       requestRef.current = requestAnimationFrame(updateGame);
     },
-    [gameState, spawnItem],
+    [gameState, spawnItem, finishGame],
   );
 
   useEffect(() => {
@@ -220,13 +239,7 @@ export default function App() {
         () =>
           setTimeLeft((t) => {
             if (t <= 1) {
-              const finalScore = scoreRef.current;
-              const finalStatus =
-                finalScore >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
-              sendData(finalScore, finalStatus);
-              setGameState(
-                finalScore >= PASSING_SCORE ? "VICTORY" : "GAME_OVER",
-              );
+              finishGame(scoreRef.current);
               return 0;
             }
             return t - 1;
@@ -235,16 +248,13 @@ export default function App() {
       );
       return () => clearInterval(timer);
     }
-  }, [gameState, sendData]);
+  }, [gameState, finishGame]);
 
   useEffect(() => {
     if (lives <= 0 && gameState === "PLAYING") {
-      const finalScore = scoreRef.current;
-      const finalStatus = finalScore >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
-      setGameState(finalScore >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
-      sendData(finalScore, finalStatus);
+      finishGame(scoreRef.current);
     }
-  }, [lives, gameState, sendData]);
+  }, [lives, gameState, finishGame]);
 
   const getCategoryAtPoint = (x: number, y: number) => {
     const zones = [
@@ -280,6 +290,7 @@ export default function App() {
       if (!item) return prev;
 
       if (droppedCategory) {
+        // Quy tắc: Nếu nội dung sai, kéo vào bất cứ ô nào cũng trừ mạng
         if (!item.isCorrect) {
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
@@ -289,12 +300,14 @@ export default function App() {
               type: "wrong",
               x: dropX,
               y: dropY,
-              message: "Sai!",
+              message: "Nội dung sai!",
             },
           ]);
           return prev.filter((i) => i.id !== id);
-        } else if (droppedCategory === item.category) {
-          const newScore = scoreRef.current + 10;
+        }
+        // Nếu nội dung đúng, kéo vào đúng ô mới được cộng điểm
+        else if (droppedCategory === item.category) {
+          const newScore = Math.min(MAX_SCORE, scoreRef.current + 10);
           scoreRef.current = newScore;
           setScore(newScore);
           sendData(newScore, "Đang thi");
@@ -307,8 +320,14 @@ export default function App() {
               y: dropY,
             },
           ]);
+
+          if (newScore >= MAX_SCORE) {
+            setTimeout(() => finishGame(MAX_SCORE), 800);
+          }
           return prev.filter((i) => i.id !== id);
-        } else {
+        }
+        // Nếu nội dung đúng nhưng kéo sai ô
+        else {
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
@@ -317,12 +336,10 @@ export default function App() {
               type: "wrong",
               x: dropX,
               y: dropY,
-              message: "Mục!",
+              message: "Sai mục!",
             },
           ]);
-          return prev.map((i) =>
-            i.id === id ? { ...i, isDragging: false } : i,
-          );
+          return prev.filter((i) => i.id !== id); // Đã kéo vào ô thì biến mất luôn dù đúng hay sai
         }
       }
       return prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i));
@@ -361,29 +378,29 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Adjusted HUD: Score, Lives & Timer - Lowered further for better visibility */}
+      {/* Adjusted HUD: Score, Lives & Timer - Lowered further for iPhone Safe Areas */}
       <AnimatePresence>
         {gameState === "PLAYING" && !isPortrait && (
           <motion.div
-            initial={{ y: -50 }}
+            initial={{ y: -60 }}
             animate={{ y: 0 }}
-            className="absolute top-6 left-6 right-6 z-40 flex justify-between items-center pointer-events-none"
+            className="absolute top-10 left-8 right-8 z-40 flex justify-between items-center pointer-events-none"
           >
-            <div className="flex gap-2 pointer-events-auto">
-              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg flex items-center gap-3 border border-white/60">
+            <div className="flex gap-3 pointer-events-auto">
+              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 border border-white/60">
                 <div className="bg-indigo-50 p-1.5 rounded-lg">
                   <Award className="text-indigo-600 w-4 h-4" />
                 </div>
                 <div className="flex flex-col">
-                  <p className="text-[7px] font-black text-slate-400 uppercase leading-none">
+                  <p className="text-[8px] font-black text-slate-400 uppercase leading-none">
                     Điểm
                   </p>
-                  <p className="text-sm font-black tabular-nums leading-none mt-0.5">
+                  <p className="text-base font-black tabular-nums leading-none mt-1">
                     {score}
                   </p>
                 </div>
               </div>
-              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg flex items-center gap-3 border border-white/60">
+              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 border border-white/60">
                 <div className="bg-rose-50 p-1.5 rounded-lg">
                   <Heart
                     className="text-rose-500 w-4 h-4"
@@ -391,20 +408,20 @@ export default function App() {
                   />
                 </div>
                 <div className="flex flex-col">
-                  <p className="text-[7px] font-black text-slate-400 uppercase leading-none">
+                  <p className="text-[8px] font-black text-slate-400 uppercase leading-none">
                     Mạng
                   </p>
-                  <p className="text-sm font-black tabular-nums leading-none mt-0.5">
+                  <p className="text-base font-black tabular-nums leading-none mt-1">
                     {lives}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-slate-900/90 backdrop-blur-md px-5 py-2 rounded-2xl text-white flex items-center gap-3 border border-white/10 shadow-xl pointer-events-auto">
+            <div className="bg-slate-900/90 backdrop-blur-md px-6 py-2 rounded-2xl text-white flex items-center gap-3 border border-white/10 shadow-2xl pointer-events-auto">
               <Timer
                 className={`w-4 h-4 ${timeLeft < 30 ? "text-rose-400 animate-pulse" : "text-indigo-400"}`}
               />
-              <p className="text-sm font-mono font-black">
+              <p className="text-base font-mono font-black">
                 {Math.floor(timeLeft / 60)}:
                 {(timeLeft % 60).toString().padStart(2, "0")}
               </p>
@@ -413,7 +430,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Drop Zones - Height remains at ~28-30% for iPhone landscape */}
       <div className="absolute bottom-0 left-0 right-0 h-[28%] md:h-[32%] z-20 px-4 pb-[env(safe-area-inset-bottom,16px)] pt-2 grid grid-cols-3 gap-3 bg-gradient-to-t from-white via-white/90 to-transparent">
         {Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => (
           <DropZone
@@ -453,7 +469,6 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      {/* MENU - Landscape Optimized Two-Column Layout */}
       <AnimatePresence>
         {gameState === "MENU" && !isPortrait && (
           <div className="absolute inset-0 z-50 bg-slate-900/20 backdrop-blur-lg flex items-center justify-center p-4">
@@ -511,6 +526,12 @@ export default function App() {
                   >
                     BẮT ĐẦU CHƠI
                   </button>
+                  <button
+                    onClick={() => (window.location.hash = "#/results")}
+                    className="px-6 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-slate-200 transition-all"
+                  >
+                    BẢNG VÀNG
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -548,7 +569,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Bảng Xếp Hạng - Landscape Optimization */}
       {route === "#/results" && (
         <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-4 md:px-12 overflow-y-auto">
           <header className="flex justify-between items-center mb-6 max-w-4xl mx-auto sticky top-0 bg-[#020617]/90 backdrop-blur py-2 z-10">
