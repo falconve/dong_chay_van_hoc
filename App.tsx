@@ -7,13 +7,14 @@ import {
   RefreshCw,
   ArrowLeft,
   Trophy,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import {
   Category,
   ActiveItem,
   GameState,
   PlayerInfo,
-  SubmitStatus,
   GameItemData,
 } from "./types";
 import { DEFAULT_GAME_DATA, DEFAULT_SPAWN_INTERVAL } from "./constants";
@@ -22,22 +23,26 @@ import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbxcB4VJPnNUWUKUal56gKpChp_Fci3Ip2B8tDY8VjHOJCFWf0BQO5XxyqBiGwy0xcFk/exec";
+  "https://script.google.com/macros/s/AKfycbyoiI0x4n9RhJ0_5Km5-3quT9OXevGNwQnjzFJZKcTVYoiQ6k0JJRqFb1eEMthC7vnC/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 80;
+
+const CATEGORY_SLUGS = {
+  [Category.CONTENT]: "content",
+  [Category.ART]: "art",
+  [Category.LESSON]: "lesson",
+};
 
 interface LeaderboardEntry {
   name: string;
   score: number | string;
   timestamp: string;
   result: string;
-  sessionId?: string;
 }
 
 export default function App() {
   const [route, setRoute] = useState(() => window.location.hash || "#/");
   const [gameData, setGameData] = useState<GameItemData[]>(DEFAULT_GAME_DATA);
-  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [gameState, setGameState] = useState<GameState>("MENU");
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(5);
@@ -50,54 +55,50 @@ export default function App() {
     className: "",
   });
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [isRefreshingDashboard, setIsRefreshingDashboard] = useState(false);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
 
   const lastSpawnTime = useRef(0);
   const requestRef = useRef<number>(0);
   const deckRef = useRef<GameItemData[]>([]);
   const sessionIdRef = useRef<string>("");
 
-  const fetchQuestions = useCallback(async () => {
-    setIsLoadingQuestions(true);
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoadingResults(true);
     try {
+      // Xóa bỏ mode: 'cors' và headers thủ công để tránh lỗi Preflight
       const response = await fetch(
-        `${GOOGLE_SCRIPT_URL}?action=getQuestions&t=${Date.now()}`,
+        `${GOOGLE_SCRIPT_URL}?action=getResults&t=${Date.now()}`,
       );
-      if (!response.ok) throw new Error("CORS or Network Error");
       const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const formattedData: GameItemData[] = data.map((item: any) => ({
-          id: item.id || Math.random().toString(36).substr(2, 9),
-          text: item.text,
-          category: item.category as Category,
-          isCorrect:
-            item.isCorrect === true ||
-            item.isCorrect === "true" ||
-            item.isCorrect === "TRUE" ||
-            item.isCorrect === "✅",
-        }));
-        setGameData(formattedData);
+      if (Array.isArray(data)) {
+        setLeaderboard(
+          data
+            .filter((i) => i.name)
+            .sort((a, b) => Number(b.score) - Number(a.score)),
+        );
       }
-    } catch (error) {
-      console.warn("Sử dụng dữ liệu Local do lỗi kết nối Sheet:", error);
+    } catch (e) {
+      console.error("Fetch error:", e);
     } finally {
-      setIsLoadingQuestions(false);
+      setIsLoadingResults(false);
     }
   }, []);
 
   useEffect(() => {
-    const handleHashChange = () => setRoute(window.location.hash || "#/");
+    const handleHashChange = () => {
+      const newRoute = window.location.hash || "#/";
+      setRoute(newRoute);
+      if (newRoute === "#/results") fetchDashboardData();
+    };
     window.addEventListener("hashchange", handleHashChange);
-    fetchQuestions();
+    if (window.location.hash === "#/results") fetchDashboardData();
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [fetchQuestions]);
+  }, [fetchDashboardData]);
 
   const sendData = async (currentScore: number, status: string) => {
-    if (!GOOGLE_SCRIPT_URL || !sessionIdRef.current || !playerInfo.name) return;
+    if (!sessionIdRef.current || !playerInfo.name) return;
     const payload = {
-      action: "saveResult",
       sessionId: sessionIdRef.current,
-      timestamp: new Date().toISOString(),
       name: `${playerInfo.name} - ${playerInfo.className}`,
       score: currentScore,
       result: status,
@@ -105,20 +106,16 @@ export default function App() {
     try {
       await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
+        mode: "no-cors", // Quan trọng: Google Script nhận tốt nhất qua no-cors
         body: JSON.stringify(payload),
       });
-    } catch (e) {
-      console.error("Sync error:", e);
-    }
+    } catch (e) {}
   };
 
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
-    sessionIdRef.current =
-      "SID-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5);
-    deckRef.current = [...gameData].sort(() => Math.random() - 0.5); // Trộn bộ câu hỏi
+    sessionIdRef.current = "SID-" + Date.now();
+    deckRef.current = [...gameData].sort(() => Math.random() - 0.5);
     setScore(0);
     setLives(5);
     setTimeLeft(GAME_DURATION_SEC);
@@ -128,20 +125,20 @@ export default function App() {
   };
 
   const spawnItem = useCallback(() => {
-    if (deckRef.current.length === 0) return; // Không còn câu hỏi để bốc
-
-    const template = deckRef.current.pop(); // Lấy 1 thẻ và XÓA khỏi bộ deck
+    if (deckRef.current.length === 0) return;
+    const template = deckRef.current.pop();
     if (!template) return;
-
-    const newItem: ActiveItem = {
-      ...template,
-      id: Math.random().toString(36).substr(2, 9),
-      x: -30,
-      y: 15 + Math.random() * 45,
-      speed: 0.22 + score / 4000,
-      isDragging: false,
-    };
-    setItems((prev) => [...prev, newItem]);
+    setItems((prev) => [
+      ...prev,
+      {
+        ...template,
+        id: Math.random().toString(36).substr(2, 9),
+        x: -30,
+        y: 15 + Math.random() * 45,
+        speed: 0.22 + score / 5000,
+        isDragging: false,
+      },
+    ]);
   }, [score]);
 
   const updateGame = useCallback(
@@ -151,20 +148,20 @@ export default function App() {
         spawnItem();
         lastSpawnTime.current = time;
       }
-      setItems((prev) => {
-        return prev
-          .map((item) => {
-            if (item.isDragging) return item;
-            const nextX = item.x + item.speed;
-            if (nextX > 110) {
-              // Nếu thẻ trôi mất mà là kiến thức đúng -> Mất mạng
-              if (item.isCorrect) setLives((l) => Math.max(0, l - 1));
-              return null;
-            }
-            return { ...item, x: nextX };
-          })
-          .filter(Boolean) as ActiveItem[];
-      });
+      setItems(
+        (prev) =>
+          prev
+            .map((item) => {
+              if (item.isDragging) return item;
+              const nextX = item.x + item.speed;
+              if (nextX > 110) {
+                if (item.isCorrect) setLives((l) => Math.max(0, l - 1));
+                return null;
+              }
+              return { ...item, x: nextX };
+            })
+            .filter(Boolean) as ActiveItem[],
+      );
       requestRef.current = requestAnimationFrame(updateGame);
     },
     [gameState, spawnItem],
@@ -173,7 +170,6 @@ export default function App() {
   useEffect(() => {
     if (gameState === "PLAYING")
       requestRef.current = requestAnimationFrame(updateGame);
-    else cancelAnimationFrame(requestRef.current);
     return () => cancelAnimationFrame(requestRef.current);
   }, [gameState, updateGame]);
 
@@ -183,10 +179,9 @@ export default function App() {
         () =>
           setTimeLeft((t) => {
             if (t <= 1) {
-              const finalStatus =
-                score >= PASSING_SCORE ? "Đạt" : "Chưa đạt (Hết giờ)";
+              const res = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
               setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
-              sendData(score, finalStatus);
+              sendData(score, res);
               return 0;
             }
             return t - 1;
@@ -199,38 +194,19 @@ export default function App() {
 
   useEffect(() => {
     if (lives <= 0 && gameState === "PLAYING") {
-      const finalStatus =
-        score >= PASSING_SCORE ? "Đạt" : "Chưa đạt (Hết mạng)";
+      const res = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
       setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
-      sendData(score, finalStatus);
+      sendData(score, res);
     }
   }, [lives, gameState, score]);
 
   const handleDragEnd = (id: string, info: any) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-
-    const zones = [
-      {
-        id: Category.CONTENT,
-        rect: document
-          .getElementById(`zone-${Category.CONTENT}`)
-          ?.getBoundingClientRect(),
-      },
-      {
-        id: Category.ART,
-        rect: document
-          .getElementById(`zone-${Category.ART}`)
-          ?.getBoundingClientRect(),
-      },
-      {
-        id: Category.LESSON,
-        rect: document
-          .getElementById(`zone-${Category.LESSON}`)
-          ?.getBoundingClientRect(),
-      },
-    ];
-
+    const zones = Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => ({
+      category: cat as Category,
+      rect: document.getElementById(`zone-${slug}`)?.getBoundingClientRect(),
+    }));
     const droppedOn = zones.find(
       (z) =>
         z.rect &&
@@ -254,37 +230,35 @@ export default function App() {
           },
         ]);
         setItems((prev) => prev.filter((i) => i.id !== id));
+      } else if (droppedOn.category === item.category) {
+        const newScore = score + 10;
+        setScore(newScore);
+        setFeedbacks((f) => [
+          ...f,
+          {
+            id: Math.random().toString(),
+            type: "correct",
+            x: info.point.x,
+            y: info.point.y,
+          },
+        ]);
+        setItems((prev) => prev.filter((i) => i.id !== id));
+        sendData(newScore, "Đang thi");
       } else {
-        if (droppedOn.id === item.category) {
-          const newScore = score + 10;
-          setScore(newScore);
-          setFeedbacks((f) => [
-            ...f,
-            {
-              id: Math.random().toString(),
-              type: "correct",
-              x: info.point.x,
-              y: info.point.y,
-            },
-          ]);
-          setItems((prev) => prev.filter((i) => i.id !== id));
-          sendData(newScore, "Đang thi"); // Cập nhật điểm thời gian thực
-        } else {
-          setLives((l) => Math.max(0, l - 1));
-          setFeedbacks((f) => [
-            ...f,
-            {
-              id: Math.random().toString(),
-              type: "wrong",
-              x: info.point.x,
-              y: info.point.y,
-              message: "Sai vị trí!",
-            },
-          ]);
-          setItems((prev) =>
-            prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i)),
-          );
-        }
+        setLives((l) => Math.max(0, l - 1));
+        setFeedbacks((f) => [
+          ...f,
+          {
+            id: Math.random().toString(),
+            type: "wrong",
+            x: info.point.x,
+            y: info.point.y,
+            message: "Sai mục!",
+          },
+        ]);
+        setItems((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i)),
+        );
       }
     } else {
       setItems((prev) =>
@@ -294,74 +268,87 @@ export default function App() {
     setActiveZone(null);
   };
 
-  const fetchDashboardData = useCallback(async () => {
-    setIsRefreshingDashboard(true);
-    try {
-      const response = await fetch(
-        `${GOOGLE_SCRIPT_URL}?action=getResults&t=${Date.now()}`,
-      );
-      const data = await response.json();
-      if (Array.isArray(data))
-        setLeaderboard(
-          data
-            .filter((i) => i.name)
-            .sort((a, b) => Number(b.score || 0) - Number(a.score || 0)),
-        );
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsRefreshingDashboard(false);
-    }
-  }, []);
-
   if (route === "#/results") {
     return (
-      <div className="min-h-screen bg-[#0f172a] text-white p-6 md:p-12 overflow-y-auto">
-        <header className="flex justify-between items-center mb-12">
-          <h1 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-4">
+      <div className="min-h-screen bg-[#020617] text-white p-6 md:p-12 overflow-y-auto">
+        <header className="flex justify-between items-center mb-10">
+          <h1 className="text-3xl font-black flex items-center gap-4">
             <Trophy className="text-amber-400" /> BẢNG VÀNG
           </h1>
           <div className="flex gap-4">
             <button
               onClick={() => (window.location.hash = "#/")}
-              className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold flex items-center gap-2"
+              className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10"
             >
               {" "}
               <ArrowLeft size={18} /> QUAY LẠI{" "}
             </button>
             <button
               onClick={() => fetchDashboardData()}
-              className={`p-3 bg-indigo-600 rounded-xl ${isRefreshingDashboard ? "animate-spin" : ""}`}
+              disabled={isLoadingResults}
+              className={`p-3 bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all ${isLoadingResults ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              {" "}
-              <RefreshCw size={20} />{" "}
+              {isLoadingResults ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <RefreshCw size={20} />
+              )}
             </button>
           </div>
         </header>
+
         <div className="max-w-4xl mx-auto space-y-4">
-          {leaderboard.map((p, i) => (
-            <div
-              key={i}
-              className="bg-white/5 p-6 rounded-3xl flex justify-between items-center border border-white/5"
-            >
-              <div className="flex items-center gap-6">
-                <span
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${i < 3 ? "bg-amber-400 text-slate-900" : "bg-slate-800"}`}
-                >
-                  {i + 1}
-                </span>
-                <h3 className="text-xl font-black">{p.name}</h3>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-black text-indigo-400">{p.score}</p>
-                <p
-                  className={`text-[10px] uppercase font-black ${p.result === "Đang thi" ? "text-amber-500 animate-pulse" : "text-slate-500"}`}
-                >
-                  {p.result}
-                </p>
-              </div>
+          {isLoadingResults && leaderboard.length === 0 ? (
+            <div className="flex flex-col items-center py-20 opacity-50">
+              <Loader2 size={48} className="animate-spin mb-4" />
+              <p className="font-bold uppercase tracking-widest text-xs">
+                Đang tải bảng xếp hạng...
+              </p>
             </div>
-          ))}
+          ) : leaderboard.length === 0 ? (
+            <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5">
+              <Trophy size={48} className="mx-auto mb-4 text-slate-700" />
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+                Chưa có dữ liệu nào
+              </p>
+            </div>
+          ) : (
+            leaderboard.map((p, i) => (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                key={i}
+                className="bg-white/5 p-6 rounded-3xl flex justify-between items-center border border-white/5 group hover:bg-white/[0.08] transition-all"
+              >
+                <div className="flex items-center gap-6">
+                  <span
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl ${i === 0 ? "bg-amber-400 text-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.4)]" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-orange-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                  >
+                    {i + 1}
+                  </span>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-200 group-hover:text-white transition-colors">
+                      {p.name}
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                      {p.timestamp}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-4xl font-black text-indigo-400 tabular-nums">
+                    {p.score}
+                  </p>
+                  <p
+                    className={`text-[10px] uppercase font-black px-3 py-1 rounded-full mt-2 inline-block ${p.result === "Đang thi" ? "text-amber-500 bg-amber-500/10 animate-pulse" : p.result === "Đạt" ? "text-green-500 bg-green-500/10" : "text-slate-500 bg-white/5"}`}
+                  >
+                    {p.result}
+                  </p>
+                </div>
+              </motion.div>
+            ))
+          )}
         </div>
       </div>
     );
@@ -374,29 +361,33 @@ export default function App() {
           <motion.div
             initial={{ y: -50 }}
             animate={{ y: 0 }}
-            className="absolute top-6 left-6 right-6 z-40 flex justify-between pointer-events-none"
+            className="absolute top-8 left-6 right-6 z-40 flex justify-between pointer-events-none"
           >
             <div className="flex gap-4 pointer-events-auto">
               <div className="bg-white/90 backdrop-blur-xl p-4 rounded-3xl shadow-xl flex items-center gap-4 border border-white">
                 <Award className="text-indigo-600" />
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase">
+                  <p className="text-[10px] font-black text-slate-400 uppercase leading-none">
                     Điểm
                   </p>
-                  <p className="text-2xl font-black">{score}</p>
+                  <p className="text-2xl font-black tabular-nums leading-none mt-1">
+                    {score}
+                  </p>
                 </div>
               </div>
               <div className="bg-white/90 backdrop-blur-xl p-4 rounded-3xl shadow-xl flex items-center gap-4 border border-white">
                 <Heart className="text-rose-500" fill="currentColor" />
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase">
+                  <p className="text-[10px] font-black text-slate-400 uppercase leading-none">
                     Mạng
                   </p>
-                  <p className="text-2xl font-black">{lives}</p>
+                  <p className="text-2xl font-black tabular-nums leading-none mt-1">
+                    {lives}
+                  </p>
                 </div>
               </div>
             </div>
-            <div className="bg-slate-900/90 backdrop-blur-xl p-4 px-8 rounded-3xl text-white flex items-center gap-4 border border-white/10">
+            <div className="bg-slate-900/90 backdrop-blur-xl p-4 px-8 rounded-3xl text-white flex items-center gap-4 border border-white/10 shadow-2xl pointer-events-auto">
               <Timer
                 className={
                   timeLeft < 30
@@ -404,7 +395,7 @@ export default function App() {
                     : "text-indigo-400"
                 }
               />
-              <p className="text-2xl font-mono font-black">
+              <p className="text-2xl font-mono font-black tabular-nums">
                 {Math.floor(timeLeft / 60)}:
                 {(timeLeft % 60).toString().padStart(2, "0")}
               </p>
@@ -413,19 +404,15 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <div className="absolute bottom-0 left-0 right-0 h-[35%] z-20 p-8 grid grid-cols-3 gap-8 bg-gradient-to-t from-white to-transparent">
-        <DropZone
-          category={Category.CONTENT}
-          highlight={activeZone === Category.CONTENT}
-        />
-        <DropZone
-          category={Category.ART}
-          highlight={activeZone === Category.ART}
-        />
-        <DropZone
-          category={Category.LESSON}
-          highlight={activeZone === Category.LESSON}
-        />
+      <div className="absolute bottom-0 left-0 right-0 h-[38%] z-20 p-8 grid grid-cols-3 gap-8 bg-gradient-to-t from-white via-white/80 to-transparent">
+        {Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => (
+          <DropZone
+            key={cat}
+            category={cat as Category}
+            slug={slug}
+            highlight={activeZone === cat}
+          />
+        ))}
       </div>
 
       <div className="absolute inset-0 z-10 overflow-hidden">
@@ -439,20 +426,23 @@ export default function App() {
               )
             }
             onDrag={(point) => {
-              const zones = [Category.CONTENT, Category.ART, Category.LESSON];
-              const z = zones.find((cat) => {
-                const r = document
-                  .getElementById(`zone-${cat}`)
-                  ?.getBoundingClientRect();
-                return (
-                  r &&
-                  point.x >= r.left &&
-                  point.x <= r.right &&
-                  point.y >= r.top &&
-                  point.y <= r.bottom
-                );
-              });
-              setActiveZone(z || null);
+              const zones = Object.entries(CATEGORY_SLUGS).map(
+                ([cat, slug]) => ({
+                  cat: cat as Category,
+                  rect: document
+                    .getElementById(`zone-${slug}`)
+                    ?.getBoundingClientRect(),
+                }),
+              );
+              const found = zones.find(
+                (z) =>
+                  z.rect &&
+                  point.x >= z.rect.left &&
+                  point.x <= z.rect.right &&
+                  point.y >= z.rect.top &&
+                  point.y <= z.rect.bottom,
+              );
+              setActiveZone(found ? found.cat : null);
             }}
             onDragEnd={handleDragEnd}
           />
@@ -473,55 +463,48 @@ export default function App() {
 
       <AnimatePresence>
         {gameState === "MENU" && (
-          <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-6">
+          <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-6 text-center">
             <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              className="bg-white p-12 rounded-[40px] shadow-2xl max-w-lg w-full text-center border border-white"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white p-12 rounded-[40px] shadow-2xl max-w-lg w-full border border-white"
             >
-              <h1 className="text-5xl font-black text-slate-800 mb-2 tracking-tighter">
+              <h1 className="text-6xl font-black text-slate-800 mb-2 tracking-tighter">
                 Dòng Chảy
               </h1>
-              <p className="text-slate-500 font-bold mb-10">
-                Phân loại kiến thức (Đạt khi ≥ {PASSING_SCORE}đ)
+              <p className="text-slate-500 font-bold mb-10 uppercase tracking-widest text-[10px]">
+                Phân loại kiến thức văn học
               </p>
-              <div className="space-y-4 mb-10">
+              <div className="space-y-4 mb-10 text-left">
                 <input
                   type="text"
                   value={playerInfo.name}
-                  placeholder="Họ và tên..."
+                  placeholder="Họ và tên học sinh..."
                   onChange={(e) =>
                     setPlayerInfo((p) => ({ ...p, name: e.target.value }))
                   }
-                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold text-center outline-none"
+                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
                 />
                 <input
                   type="text"
                   value={playerInfo.className}
-                  placeholder="Lớp..."
+                  placeholder="Lớp học..."
                   onChange={(e) =>
                     setPlayerInfo((p) => ({ ...p, className: e.target.value }))
                   }
-                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold text-center outline-none"
+                  className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
                 />
               </div>
               <button
                 onClick={startGame}
-                disabled={
-                  !playerInfo.name ||
-                  !playerInfo.className ||
-                  isLoadingQuestions
-                }
-                className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-2xl shadow-xl disabled:opacity-50"
+                disabled={!playerInfo.name || !playerInfo.className}
+                className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-2xl shadow-xl disabled:opacity-50 active:scale-95 transition-all hover:bg-indigo-500"
               >
-                {isLoadingQuestions ? "ĐANG TẢI..." : "BẮT ĐẦU CHƠI"}
+                BẮT ĐẦU CHƠI
               </button>
               <button
-                onClick={() => {
-                  fetchDashboardData();
-                  window.location.hash = "#/results";
-                }}
-                className="w-full mt-4 py-4 bg-slate-100 rounded-2xl font-black text-slate-600"
+                onClick={() => (window.location.hash = "#/results")}
+                className="w-full mt-4 py-4 bg-slate-100 rounded-2xl font-black text-slate-600 hover:bg-slate-200 transition-all"
               >
                 XEM BẢNG VÀNG
               </button>
@@ -536,27 +519,26 @@ export default function App() {
               animate={{ scale: 1 }}
               className="bg-white p-12 rounded-[50px] shadow-2xl text-center max-w-sm w-full"
             >
-              <h2 className="text-4xl font-black mb-4">KẾT THÚC</h2>
-              <div className="text-7xl font-black text-indigo-600 mb-6">
+              <h2 className="text-4xl font-black mb-4 text-slate-800 uppercase tracking-tighter">
+                {gameState === "VICTORY" ? "HOÀN THÀNH!" : "KẾT THÚC"}
+              </h2>
+              <div className="text-8xl font-black text-indigo-600 mb-8 tracking-tighter">
                 {score}
               </div>
-              <div className="mb-8">
+              <div className="mb-8 font-black uppercase tracking-widest text-xs">
                 {score >= PASSING_SCORE ? (
-                  <span className="text-green-600 bg-green-50 px-6 py-2 rounded-xl font-black border border-green-200">
+                  <span className="text-green-600 bg-green-50 px-8 py-3 rounded-2xl border border-green-200 shadow-sm">
                     ĐẠT YÊU CẦU
                   </span>
                 ) : (
-                  <span className="text-rose-500 bg-rose-50 px-6 py-2 rounded-xl font-black border border-rose-200">
+                  <span className="text-rose-500 bg-rose-50 px-8 py-3 rounded-2xl border border-rose-200 shadow-sm">
                     CHƯA ĐẠT
                   </span>
                 )}
               </div>
               <button
-                onClick={() => {
-                  setGameState("MENU");
-                  fetchQuestions();
-                }}
-                className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl"
+                onClick={() => setGameState("MENU")}
+                className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-black active:scale-95 transition-all"
               >
                 CHƠI LẠI
               </button>
