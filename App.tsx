@@ -7,7 +7,6 @@ import {
   RefreshCw,
   ArrowLeft,
   Trophy,
-  AlertTriangle,
   Loader2,
 } from "lucide-react";
 import {
@@ -42,7 +41,6 @@ interface LeaderboardEntry {
 
 export default function App() {
   const [route, setRoute] = useState(() => window.location.hash || "#/");
-  const [gameData, setGameData] = useState<GameItemData[]>(DEFAULT_GAME_DATA);
   const [gameState, setGameState] = useState<GameState>("MENU");
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(5);
@@ -61,7 +59,13 @@ export default function App() {
   const requestRef = useRef<number>(0);
   const deckRef = useRef<GameItemData[]>([]);
   const sessionIdRef = useRef<string>("");
-  const scoreRef = useRef(0); // Dùng ref để lưu điểm chính xác cho sendData
+  const scoreRef = useRef(0);
+  const playerInfoRef = useRef<PlayerInfo>({ name: "", className: "" });
+
+  // Cập nhật ref để sendData luôn có dữ liệu mới nhất
+  useEffect(() => {
+    playerInfoRef.current = playerInfo;
+  }, [playerInfo]);
 
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResults(true);
@@ -95,45 +99,53 @@ export default function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, [fetchDashboardData]);
 
-  const sendData = useCallback(
-    async (currentScore: number, status: string) => {
-      if (!sessionIdRef.current || !playerInfo.name) return;
-      const payload = {
-        sessionId: sessionIdRef.current,
-        name: `${playerInfo.name} - ${playerInfo.className}`,
-        score: currentScore,
-        result: status,
-      };
-      try {
-        await fetch(GOOGLE_SCRIPT_URL, {
-          method: "POST",
-          mode: "no-cors",
-          body: JSON.stringify(payload),
-        });
-      } catch (e) {}
-    },
-    [playerInfo],
-  );
+  const sendData = useCallback(async (currentScore: number, status: string) => {
+    const info = playerInfoRef.current;
+    if (!sessionIdRef.current || !info.name) return;
+
+    const payload = {
+      sessionId: sessionIdRef.current,
+      name: `${info.name} - ${info.className}`,
+      score: currentScore,
+      result: status,
+    };
+
+    try {
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      console.error("Gửi dữ liệu lỗi:", e);
+    }
+  }, []);
 
   const startGame = () => {
     if (!playerInfo.name.trim() || !playerInfo.className.trim()) return;
+
+    // Reset game
     sessionIdRef.current = "SID-" + Date.now();
-    deckRef.current = [...gameData].sort(() => Math.random() - 0.5);
-    setScore(0);
+    deckRef.current = [...DEFAULT_GAME_DATA].sort(() => Math.random() - 0.5);
     scoreRef.current = 0;
+    setScore(0);
     setLives(5);
     setTimeLeft(GAME_DURATION_SEC);
     setItems([]);
     setGameState("PLAYING");
+
+    // Gửi dữ liệu ngay khi bắt đầu
     sendData(0, "Đang thi");
   };
 
   const spawnItem = useCallback(() => {
     if (deckRef.current.length === 0) {
-      deckRef.current = [...gameData].sort(() => Math.random() - 0.5);
+      deckRef.current = [...DEFAULT_GAME_DATA].sort(() => Math.random() - 0.5);
     }
     const template = deckRef.current.pop();
     if (!template) return;
+
     setItems((prev) => [
       ...prev,
       {
@@ -145,15 +157,17 @@ export default function App() {
         isDragging: false,
       },
     ]);
-  }, [gameData]);
+  }, []);
 
   const updateGame = useCallback(
     (time: number) => {
       if (gameState !== "PLAYING") return;
+
       if (time - lastSpawnTime.current > DEFAULT_SPAWN_INTERVAL) {
         spawnItem();
         lastSpawnTime.current = time;
       }
+
       setItems(
         (prev) =>
           prev
@@ -168,14 +182,16 @@ export default function App() {
             })
             .filter(Boolean) as ActiveItem[],
       );
+
       requestRef.current = requestAnimationFrame(updateGame);
     },
     [gameState, spawnItem],
   );
 
   useEffect(() => {
-    if (gameState === "PLAYING")
+    if (gameState === "PLAYING") {
       requestRef.current = requestAnimationFrame(updateGame);
+    }
     return () => cancelAnimationFrame(requestRef.current);
   }, [gameState, updateGame]);
 
@@ -211,26 +227,23 @@ export default function App() {
     }
   }, [lives, gameState, sendData]);
 
-  const getZoneAtPoint = (x: number, y: number) => {
-    for (const [cat, slug] of Object.entries(CATEGORY_SLUGS)) {
-      const el = document.getElementById(`zone-${slug}`);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        if (
-          x >= rect.left &&
-          x <= rect.right &&
-          y >= rect.top &&
-          y <= rect.bottom
-        ) {
-          return cat as Category;
-        }
-      }
-    }
+  // Tìm vùng thả bằng elementFromPoint - Độ chính xác tuyệt đối
+  const getZoneFromPoint = (x: number, y: number) => {
+    const element = document.elementFromPoint(x, y);
+    if (!element) return null;
+
+    const zoneElement = element.closest('[id^="zone-"]');
+    if (!zoneElement) return null;
+
+    const id = zoneElement.id;
+    if (id.includes("content")) return Category.CONTENT;
+    if (id.includes("art")) return Category.ART;
+    if (id.includes("lesson")) return Category.LESSON;
     return null;
   };
 
   const handleDragEnd = (id: string, info: any) => {
-    const droppedCategory = getZoneAtPoint(info.point.x, info.point.y);
+    const droppedCategory = getZoneFromPoint(info.point.x, info.point.y);
 
     setItems((prev) => {
       const item = prev.find((i) => i.id === id);
@@ -238,6 +251,7 @@ export default function App() {
 
       if (droppedCategory) {
         if (!item.isCorrect) {
+          // Kiến thức sai
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
@@ -251,7 +265,7 @@ export default function App() {
           ]);
           return prev.filter((i) => i.id !== id);
         } else if (droppedCategory === item.category) {
-          // Đúng loại
+          // Đúng mục
           const newScore = scoreRef.current + 10;
           scoreRef.current = newScore;
           setScore(newScore);
@@ -267,7 +281,7 @@ export default function App() {
           ]);
           return prev.filter((i) => i.id !== id);
         } else {
-          // Sai loại
+          // Sai mục
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
@@ -284,6 +298,7 @@ export default function App() {
           );
         }
       }
+
       return prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i));
     });
 
@@ -291,12 +306,13 @@ export default function App() {
   };
 
   const handleDrag = (point: { x: number; y: number }) => {
-    const zone = getZoneAtPoint(point.x, point.y);
+    const zone = getZoneFromPoint(point.x, point.y);
     setActiveZone(zone);
   };
 
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
+      {/* UI Lớp phủ game */}
       <AnimatePresence>
         {gameState === "PLAYING" && (
           <motion.div
@@ -345,6 +361,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Vùng thả DropZone */}
       <div className="absolute bottom-0 left-0 right-0 h-[38%] z-20 p-8 grid grid-cols-3 gap-8 bg-gradient-to-t from-white via-white/80 to-transparent">
         {Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => (
           <DropZone
@@ -356,6 +373,7 @@ export default function App() {
         ))}
       </div>
 
+      {/* Thẻ trôi nổi */}
       <div className="absolute inset-0 z-10 overflow-hidden">
         {items.map((item) => (
           <FloatingCard
@@ -372,6 +390,7 @@ export default function App() {
         ))}
       </div>
 
+      {/* Phản hồi điểm số/sai lỗi */}
       <AnimatePresence>
         {feedbacks.map((f) => (
           <Feedback
@@ -384,6 +403,7 @@ export default function App() {
         ))}
       </AnimatePresence>
 
+      {/* Màn hình Menu/Kết quả */}
       <AnimatePresence>
         {gameState === "MENU" && (
           <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-6 text-center">
@@ -470,6 +490,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Bảng xếp hạng */}
       {route === "#/results" && (
         <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-6 md:p-12 overflow-y-auto">
           <header className="flex justify-between items-center mb-10">
