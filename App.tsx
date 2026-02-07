@@ -169,9 +169,9 @@ export default function App() {
       {
         ...template,
         id: Math.random().toString(36).substr(2, 9),
-        x: -20,
-        y: 10 + Math.random() * 35, // Giới hạn y thấp hơn cho màn hình ngang
-        speed: 0.22 + scoreRef.current / 5000,
+        x: -30,
+        y: 8 + Math.random() * 32, // Khu vực xuất hiện thẻ gọn hơn
+        speed: 0.25 + scoreRef.current / 6000,
         isDragging: false,
       },
     ]);
@@ -192,7 +192,7 @@ export default function App() {
             .map((item) => {
               if (item.isDragging) return item;
               const nextX = item.x + item.speed;
-              if (nextX > 110) {
+              if (nextX > 115) {
                 if (item.isCorrect) setLives((l) => Math.max(0, l - 1));
                 return null;
               }
@@ -288,7 +288,7 @@ export default function App() {
               type: "wrong",
               x: dropX,
               y: dropY,
-              message: "Kiến thức sai!",
+              message: "Sai!",
             },
           ]);
           return prev.filter((i) => i.id !== id);
@@ -316,7 +316,7 @@ export default function App() {
               type: "wrong",
               x: dropX,
               y: dropY,
-              message: "Sai mục!",
+              message: "Mục!",
             },
           ]);
           return prev.map((i) =>
@@ -336,8 +336,8 @@ export default function App() {
   };
 
   return (
-    <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
-      {/* Cảnh báo xoay màn hình */}
+    <div className="relative w-full h-[100svh] bg-slate-50 overflow-hidden select-none touch-none">
+      {/* Portrait Warning */}
       <AnimatePresence>
         {isPortrait && (
           <motion.div
@@ -350,56 +350,39 @@ export default function App() {
               size={64}
               className="mb-6 animate-spin-slow text-indigo-400"
             />
-            <h2 className="text-2xl font-black mb-2 uppercase tracking-tighter">
-              Vui lòng xoay ngang điện thoại
+            <h2 className="text-xl font-black mb-2 uppercase tracking-tighter">
+              XOAY NGANG ĐIỆN THOẠI
             </h2>
-            <p className="text-slate-400 font-bold text-sm">
-              Trò chơi được thiết kế để chơi tốt nhất trên màn hình ngang.
+            <p className="text-slate-400 font-bold text-xs">
+              Vui lòng xoay ngang để có trải nghiệm chơi tốt nhất.
             </p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* HUD: Score & Lives */}
+      {/* Super Compact HUD for Landscape */}
       <AnimatePresence>
         {gameState === "PLAYING" && !isPortrait && (
           <motion.div
             initial={{ y: -50 }}
             animate={{ y: 0 }}
-            className="absolute top-4 left-4 right-4 z-40 flex justify-between items-start pointer-events-none"
+            className="absolute top-2 left-4 right-4 z-40 flex justify-between items-center pointer-events-none"
           >
-            <div className="flex gap-2 md:gap-4 pointer-events-auto">
-              <div className="bg-white/95 backdrop-blur-xl p-2 md:p-4 rounded-2xl md:rounded-3xl shadow-lg flex items-center gap-2 md:gap-4 border border-white">
-                <Award className="text-indigo-600 w-5 h-5 md:w-6 md:h-6" />
-                <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                    Điểm
-                  </p>
-                  <p className="text-lg md:text-2xl font-black tabular-nums leading-none mt-1">
-                    {score}
-                  </p>
-                </div>
+            <div className="flex gap-2 pointer-events-auto">
+              <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md flex items-center gap-2 border border-white/50">
+                <Award className="text-indigo-600 w-4 h-4" />
+                <p className="text-sm font-black tabular-nums">{score}</p>
               </div>
-              <div className="bg-white/95 backdrop-blur-xl p-2 md:p-4 rounded-2xl md:rounded-3xl shadow-lg flex items-center gap-2 md:gap-4 border border-white">
-                <Heart
-                  className="text-rose-500 w-5 h-5 md:w-6 md:h-6"
-                  fill="currentColor"
-                />
-                <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                    Mạng
-                  </p>
-                  <p className="text-lg md:text-2xl font-black tabular-nums leading-none mt-1">
-                    {lives}
-                  </p>
-                </div>
+              <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md flex items-center gap-2 border border-white/50">
+                <Heart className="text-rose-500 w-4 h-4" fill="currentColor" />
+                <p className="text-sm font-black tabular-nums">{lives}</p>
               </div>
             </div>
-            <div className="bg-slate-900/90 backdrop-blur-xl p-2 px-4 md:p-4 md:px-8 rounded-2xl md:rounded-3xl text-white flex items-center gap-2 md:gap-4 border border-white/10 shadow-2xl pointer-events-auto">
+            <div className="bg-slate-900/90 backdrop-blur-md px-4 py-1.5 rounded-xl text-white flex items-center gap-2 border border-white/10 shadow-lg pointer-events-auto">
               <Timer
-                className={`w-5 h-5 md:w-6 md:h-6 ${timeLeft < 30 ? "text-rose-400 animate-pulse" : "text-indigo-400"}`}
+                className={`w-4 h-4 ${timeLeft < 30 ? "text-rose-400 animate-pulse" : "text-indigo-400"}`}
               />
-              <p className="text-lg md:text-2xl font-mono font-black tabular-nums">
+              <p className="text-sm font-mono font-black">
                 {Math.floor(timeLeft / 60)}:
                 {(timeLeft % 60).toString().padStart(2, "0")}
               </p>
@@ -408,8 +391,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Vùng thả DropZones - Điều chỉnh độ cao cho màn hình ngang */}
-      <div className="absolute bottom-0 left-0 right-0 h-[30%] md:h-[35%] z-20 p-4 md:p-8 grid grid-cols-3 gap-4 md:gap-8 bg-gradient-to-t from-white via-white/80 to-transparent">
+      {/* Drop Zones - Optimized height for iPhone Landscape */}
+      <div className="absolute bottom-0 left-0 right-0 h-[28%] md:h-[32%] z-20 px-4 pb-[env(safe-area-inset-bottom,16px)] pt-2 grid grid-cols-3 gap-3 bg-gradient-to-t from-white via-white/90 to-transparent">
         {Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => (
           <DropZone
             key={cat}
@@ -448,31 +431,34 @@ export default function App() {
         ))}
       </AnimatePresence>
 
-      {/* MENU - Tối ưu cho màn hình ngang */}
+      {/* MENU - Landscape Optimized Two-Column Layout */}
       <AnimatePresence>
         {gameState === "MENU" && !isPortrait && (
-          <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="absolute inset-0 z-50 bg-slate-900/20 backdrop-blur-lg flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-white p-6 md:p-12 rounded-[2rem] md:rounded-[40px] shadow-2xl max-w-2xl w-full border border-white flex flex-col md:flex-row gap-8 items-center"
+              className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-2xl max-w-3xl w-full border border-white flex gap-8 items-center overflow-hidden"
             >
-              <div className="text-center md:text-left flex-1">
-                <h1 className="text-4xl md:text-6xl font-black text-slate-800 mb-1 tracking-tighter italic">
+              <div className="hidden sm:flex flex-col items-center justify-center w-1/3 text-center border-r border-slate-100 pr-8">
+                <div className="w-16 h-16 bg-indigo-600 rounded-3xl flex items-center justify-center mb-4 shadow-xl shadow-indigo-200">
+                  <BookOpen size={32} className="text-white" />
+                </div>
+                <h1 className="text-3xl font-black text-slate-800 mb-1 italic tracking-tight">
                   Dòng Chảy
                 </h1>
-                <p className="text-slate-500 font-bold mb-6 uppercase tracking-widest text-[8px] md:text-[10px]">
-                  Phân loại kiến thức văn học
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                  Phân loại văn học
                 </p>
-                <div className="hidden md:block space-y-2 text-slate-400 text-xs font-medium">
-                  <p>• Kéo thẻ kiến thức trôi dạt vào đúng mục.</p>
-                  <p>• Tránh các thẻ có nội dung sai lệch.</p>
-                  <p>• Đạt {PASSING_SCORE} điểm để hoàn thành nhiệm vụ.</p>
-                </div>
               </div>
 
-              <div className="flex-1 w-full space-y-4">
-                <div className="space-y-3">
+              <div className="flex-1 space-y-4">
+                <div className="sm:hidden text-center mb-2">
+                  <h1 className="text-2xl font-black text-slate-800 italic">
+                    Dòng Chảy
+                  </h1>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
                     value={playerInfo.name}
@@ -480,7 +466,7 @@ export default function App() {
                     onChange={(e) =>
                       setPlayerInfo((p) => ({ ...p, name: e.target.value }))
                     }
-                    className="w-full p-3 md:p-4 bg-slate-100 rounded-xl md:rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all text-sm"
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all text-xs"
                   />
                   <input
                     type="text"
@@ -492,22 +478,24 @@ export default function App() {
                         className: e.target.value,
                       }))
                     }
-                    className="w-full p-3 md:p-4 bg-slate-100 rounded-xl md:rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all text-sm"
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all text-xs"
                   />
                 </div>
-                <button
-                  onClick={startGame}
-                  disabled={!playerInfo.name || !playerInfo.className}
-                  className="w-full py-4 md:py-6 bg-indigo-600 text-white rounded-xl md:rounded-[2rem] font-black text-lg md:text-2xl shadow-xl disabled:opacity-50 active:scale-95 transition-all hover:bg-indigo-500"
-                >
-                  BẮT ĐẦU CHƠI
-                </button>
-                <button
-                  onClick={() => (window.location.hash = "#/results")}
-                  className="w-full py-2 md:py-3 bg-slate-100 rounded-xl font-black text-slate-600 hover:bg-slate-200 transition-all text-xs uppercase tracking-widest"
-                >
-                  XEM BẢNG VÀNG
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={startGame}
+                    disabled={!playerInfo.name || !playerInfo.className}
+                    className="flex-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg disabled:opacity-50 active:scale-95 transition-all hover:bg-indigo-500 flex-1"
+                  >
+                    BẮT ĐẦU CHƠI
+                  </button>
+                  <button
+                    onClick={() => (window.location.hash = "#/results")}
+                    className="px-6 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-slate-200 transition-all"
+                  >
+                    BẢNG VÀNG
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -518,28 +506,24 @@ export default function App() {
             <motion.div
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
-              className="bg-white p-8 md:p-12 rounded-[40px] md:rounded-[50px] shadow-2xl text-center max-w-sm w-full"
+              className="bg-white p-6 rounded-[3rem] shadow-2xl text-center max-w-sm w-full"
             >
-              <h2 className="text-3xl md:text-4xl font-black mb-2 text-slate-800 uppercase tracking-tighter">
+              <h2 className="text-2xl font-black mb-1 text-slate-800 uppercase tracking-tighter">
                 {gameState === "VICTORY" ? "HOÀN THÀNH!" : "KẾT THÚC"}
               </h2>
-              <div className="text-6xl md:text-8xl font-black text-indigo-600 mb-6 md:mb-8 tracking-tighter">
+              <div className="text-6xl font-black text-indigo-600 mb-4 tracking-tighter">
                 {score}
               </div>
-              <div className="mb-6 md:mb-8 font-black uppercase tracking-widest text-[10px]">
-                {score >= PASSING_SCORE ? (
-                  <span className="text-green-600 bg-green-50 px-6 py-2 rounded-xl border border-green-200 shadow-sm font-bold">
-                    ĐẠT YÊU CẦU
-                  </span>
-                ) : (
-                  <span className="text-rose-500 bg-rose-50 px-6 py-2 rounded-xl border border-rose-200 shadow-sm font-bold">
-                    CHƯA ĐẠT
-                  </span>
-                )}
+              <div className="mb-6">
+                <span
+                  className={`px-5 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${score >= PASSING_SCORE ? "text-green-600 bg-green-50 border-green-200" : "text-rose-500 bg-rose-50 border-rose-200"}`}
+                >
+                  {score >= PASSING_SCORE ? "ĐẠT YÊU CẦU" : "CHƯA ĐẠT"}
+                </span>
               </div>
               <button
                 onClick={() => setGameState("MENU")}
-                className="w-full py-4 md:py-6 bg-slate-900 text-white rounded-xl md:rounded-[2rem] font-black text-lg md:text-xl hover:bg-black active:scale-95 transition-all"
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm hover:bg-black active:scale-95 transition-all"
               >
                 CHƠI LẠI
               </button>
@@ -548,26 +532,25 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Bảng Xếp Hạng - Tối ưu scroll trên mobile ngang */}
+      {/* Bảng Xếp Hạng - Landscape Optimization */}
       {route === "#/results" && (
-        <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-4 md:p-12 overflow-y-auto">
-          <header className="flex justify-between items-center mb-6 md:mb-10 max-w-4xl mx-auto">
-            <h1 className="text-xl md:text-3xl font-black flex items-center gap-4">
-              <Trophy className="text-amber-400 w-6 h-6 md:w-8 md:h-8" /> BẢNG
-              VÀNG
+        <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-4 md:px-12 overflow-y-auto">
+          <header className="flex justify-between items-center mb-6 max-w-4xl mx-auto sticky top-0 bg-[#020617]/90 backdrop-blur py-2 z-10">
+            <h1 className="text-xl font-black flex items-center gap-3">
+              <Trophy className="text-amber-400 w-5 h-5" /> BẢNG VÀNG
             </h1>
-            <div className="flex gap-2 md:gap-4">
+            <div className="flex gap-2">
               <button
                 onClick={() => (window.location.hash = "#/")}
-                className="px-4 py-2 md:px-6 md:py-3 bg-white/5 border border-white/10 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 text-xs md:text-base"
+                className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 text-xs"
               >
                 {" "}
-                <ArrowLeft size={16} /> QUAY LẠI{" "}
+                <ArrowLeft size={14} />{" "}
               </button>
               <button
                 onClick={() => fetchDashboardData()}
                 disabled={isLoadingResults}
-                className={`p-2 md:p-3 bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all ${isLoadingResults ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`p-2 bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all ${isLoadingResults ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 {isLoadingResults ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -578,54 +561,56 @@ export default function App() {
             </div>
           </header>
 
-          <div className="max-w-4xl mx-auto space-y-3 pb-10">
-            {leaderboard.length === 0 && !isLoadingResults ? (
-              <div className="text-center py-10 md:py-20 bg-white/5 rounded-[30px] border border-white/5">
-                <Trophy size={48} className="mx-auto mb-4 text-slate-700" />
-                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">
-                  Chưa có kết quả nào.
-                </p>
-              </div>
-            ) : (
-              leaderboard.map((p, i) => (
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  key={i}
-                  className="bg-white/5 p-4 md:p-6 rounded-2xl md:rounded-3xl flex justify-between items-center border border-white/5 group hover:bg-white/[0.08] transition-all"
-                >
-                  <div className="flex items-center gap-4 md:gap-6">
-                    <span
-                      className={`w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-2xl flex items-center justify-center font-black text-sm md:text-xl ${i === 0 ? "bg-amber-400 text-slate-900" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-orange-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
-                    >
-                      {i + 1}
-                    </span>
-                    <div>
-                      <h3 className="text-sm md:text-xl font-black text-slate-200 group-hover:text-white transition-colors truncate max-w-[150px] md:max-w-md">
-                        {p.name}
-                      </h3>
-                      <p className="text-[8px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 md:mt-1">
-                        {p.timestamp}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl md:text-4xl font-black text-indigo-400 tabular-nums">
-                      {p.score}
-                    </p>
-                    <p
-                      className={`text-[7px] md:text-[10px] uppercase font-black px-2 py-0.5 md:px-3 md:py-1 rounded-full mt-1 md:mt-2 inline-block ${p.result === "Đang thi" ? "text-amber-500 bg-amber-500/10 animate-pulse" : p.result === "Đạt" ? "text-green-500 bg-green-500/10" : "text-slate-400 bg-white/5"}`}
-                    >
-                      {p.result}
-                    </p>
-                  </div>
-                </motion.div>
-              ))
-            )}
+          <div className="max-w-4xl mx-auto space-y-2 pb-10">
+            {leaderboard.map((p, i) => (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                key={i}
+                className="bg-white/5 p-3 rounded-2xl flex justify-between items-center border border-white/5"
+              >
+                <div className="flex items-center gap-4">
+                  <span
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${i === 0 ? "bg-amber-400 text-slate-900" : i === 1 ? "bg-slate-300 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                  >
+                    {i + 1}
+                  </span>
+                  <h3 className="text-sm font-bold text-slate-200 truncate max-w-[140px] md:max-w-md">
+                    {p.name}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-6">
+                  <p className="text-lg font-black text-indigo-400 tabular-nums">
+                    {p.score}
+                  </p>
+                  <p
+                    className={`hidden sm:block text-[8px] font-black px-2 py-0.5 rounded-full ${p.result === "Đạt" ? "text-green-500 bg-green-500/10" : "text-slate-400 bg-white/5"}`}
+                  >
+                    {p.result}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       )}
     </div>
   );
 }
+
+const BookOpen = ({ size, className }: { size: number; className: string }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+  </svg>
+);

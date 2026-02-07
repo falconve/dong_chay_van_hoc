@@ -15,18 +15,17 @@ export const FloatingCard = memo(
       <motion.div
         drag
         dragSnapToOrigin={true}
-        dragElastic={0.1}
+        dragElastic={0.05}
         whileDrag={{
-          scale: 1.02,
-          rotate: [0, -0.5, 0.5, 0],
+          scale: 1.05,
           cursor: "grabbing",
           zIndex: 100,
-          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
+          boxShadow: "0 15px 30px -10px rgba(0, 0, 0, 0.3)",
         }}
         onDragStart={() => onDragStart(item.id)}
         onDrag={(_, info) => onDrag(info.point)}
         onDragEnd={(_, info) => onDragEnd(item.id, info)}
-        initial={{ scale: 0.8, opacity: 0 }}
+        initial={{ scale: 0.9, opacity: 0 }}
         animate={{
           scale: 1,
           opacity: 1,
@@ -40,16 +39,16 @@ export const FloatingCard = memo(
         }}
         className={`
         cursor-grab
-        w-[50vw] sm:w-[40vw] md:w-80 lg:w-96 p-2 md:p-5 rounded-xl md:rounded-2xl shadow-lg border-l-4 md:border-l-[10px] border-indigo-500 bg-white/95 backdrop-blur-sm
-        text-[10px] md:text-xl lg:text-2xl font-bold leading-tight md:leading-snug text-slate-800
-        select-none transition-shadow duration-200
-        ${item.isDragging ? "ring-2 md:ring-4 ring-indigo-400/30" : ""}
+        w-[280px] sm:w-[320px] md:w-[380px] p-3 md:p-4 rounded-xl md:rounded-2xl shadow-md border-l-[6px] md:border-l-[8px] border-indigo-500 bg-white/95 backdrop-blur-md
+        text-[12px] md:text-lg font-bold leading-tight text-slate-800
+        select-none transition-shadow duration-200 border border-slate-100
+        ${item.isDragging ? "ring-2 ring-indigo-400/20" : ""}
       `}
       >
-        <div className="absolute top-1 right-2 text-[6px] md:text-[9px] uppercase tracking-widest text-slate-300 font-black">
+        <div className="absolute -top-2 right-3 px-2 py-0.5 bg-indigo-500 text-[6px] md:text-[8px] uppercase tracking-widest text-white font-black rounded-full shadow-sm">
           LITERARY
         </div>
-        <div className="line-clamp-3 md:line-clamp-none">{item.text}</div>
+        <div className="line-clamp-2 md:line-clamp-3">{item.text}</div>
       </motion.div>
     );
   },
