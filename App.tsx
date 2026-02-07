@@ -23,7 +23,7 @@ import { FloatingCard } from "./components/FloatingCard";
 import { Feedback } from "./components/Feedback";
 
 const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbyoiI0x4n9RhJ0_5Km5-3quT9OXevGNwQnjzFJZKcTVYoiQ6k0JJRqFb1eEMthC7vnC/exec";
+  "https://script.google.com/macros/s/AKfycbwtnEJ0A_JHUOcdQZ1bPuvIeMp8SDIWvf2sKD3o1ADFxNuee8hdA3xHwCpc79mmqpk/exec";
 const GAME_DURATION_SEC = 180;
 const PASSING_SCORE = 80;
 
@@ -57,11 +57,11 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
 
-  const activeZoneRef = useRef<Category | null>(null);
   const lastSpawnTime = useRef(0);
   const requestRef = useRef<number>(0);
   const deckRef = useRef<GameItemData[]>([]);
   const sessionIdRef = useRef<string>("");
+  const scoreRef = useRef(0); // Dùng ref để lưu điểm chính xác cho sendData
 
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResults(true);
@@ -120,6 +120,7 @@ export default function App() {
     sessionIdRef.current = "SID-" + Date.now();
     deckRef.current = [...gameData].sort(() => Math.random() - 0.5);
     setScore(0);
+    scoreRef.current = 0;
     setLives(5);
     setTimeLeft(GAME_DURATION_SEC);
     setItems([]);
@@ -128,7 +129,6 @@ export default function App() {
   };
 
   const spawnItem = useCallback(() => {
-    // Nếu hết bài, tự động nạp lại và xáo trộn
     if (deckRef.current.length === 0) {
       deckRef.current = [...gameData].sort(() => Math.random() - 0.5);
     }
@@ -141,11 +141,11 @@ export default function App() {
         id: Math.random().toString(36).substr(2, 9),
         x: -30,
         y: 15 + Math.random() * 45,
-        speed: 0.22 + score / 10000,
+        speed: 0.22 + scoreRef.current / 10000,
         isDragging: false,
       },
     ]);
-  }, [gameData, score]);
+  }, [gameData]);
 
   const updateGame = useCallback(
     (time: number) => {
@@ -185,11 +185,13 @@ export default function App() {
         () =>
           setTimeLeft((t) => {
             if (t <= 1) {
-              // Fix: Access score state directly instead of using the setGameState updater which provides GameState string
-              // This resolves the errors where a string was being compared to a number and passed to sendData.
-              const finalStatus = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
-              sendData(score, finalStatus);
-              setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
+              const finalScore = scoreRef.current;
+              const finalStatus =
+                finalScore >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
+              sendData(finalScore, finalStatus);
+              setGameState(
+                finalScore >= PASSING_SCORE ? "VICTORY" : "GAME_OVER",
+              );
               return 0;
             }
             return t - 1;
@@ -198,105 +200,100 @@ export default function App() {
       );
       return () => clearInterval(timer);
     }
-    // Added score to dependencies to ensure the timer closure has access to the most recent score.
-  }, [gameState, score, sendData]);
+  }, [gameState, sendData]);
 
   useEffect(() => {
     if (lives <= 0 && gameState === "PLAYING") {
-      const finalStatus = score >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
-      setGameState(score >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
-      sendData(score, finalStatus);
+      const finalScore = scoreRef.current;
+      const finalStatus = finalScore >= PASSING_SCORE ? "Đạt" : "Chưa đạt";
+      setGameState(finalScore >= PASSING_SCORE ? "VICTORY" : "GAME_OVER");
+      sendData(finalScore, finalStatus);
     }
-  }, [lives, gameState, score, sendData]);
+  }, [lives, gameState, sendData]);
 
-  const handleDragEnd = useCallback(
-    (id: string, info: any) => {
-      setItems((prev) => {
-        const item = prev.find((i) => i.id === id);
-        if (!item) return prev;
-
-        // Sử dụng ref để xác định vùng thả vì nó luôn cập nhật tức thì
-        const droppedCategory = activeZoneRef.current;
-
-        if (droppedCategory) {
-          if (!item.isCorrect) {
-            // Trường hợp: Thả một kiến thức SAI vào bất kỳ ô nào
-            setLives((l) => Math.max(0, l - 1));
-            setFeedbacks((f) => [
-              ...f,
-              {
-                id: Math.random().toString(),
-                type: "wrong",
-                x: info.point.x,
-                y: info.point.y,
-                message: "Kiến thức sai!",
-              },
-            ]);
-            return prev.filter((i) => i.id !== id);
-          } else if (droppedCategory === item.category) {
-            // Trường hợp: Thả đúng kiến thức vào đúng ô
-            setScore((s) => {
-              const newScore = s + 10;
-              sendData(newScore, "Đang thi");
-              return newScore;
-            });
-            setFeedbacks((f) => [
-              ...f,
-              {
-                id: Math.random().toString(),
-                type: "correct",
-                x: info.point.x,
-                y: info.point.y,
-              },
-            ]);
-            return prev.filter((i) => i.id !== id);
-          } else {
-            // Trường hợp: Thả đúng kiến thức nhưng SAI ô phân loại
-            setLives((l) => Math.max(0, l - 1));
-            setFeedbacks((f) => [
-              ...f,
-              {
-                id: Math.random().toString(),
-                type: "wrong",
-                x: info.point.x,
-                y: info.point.y,
-                message: "Sai mục!",
-              },
-            ]);
-            return prev.map((i) =>
-              i.id === id ? { ...i, isDragging: false } : i,
-            );
-          }
+  const getZoneAtPoint = (x: number, y: number) => {
+    for (const [cat, slug] of Object.entries(CATEGORY_SLUGS)) {
+      const el = document.getElementById(`zone-${slug}`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (
+          x >= rect.left &&
+          x <= rect.right &&
+          y >= rect.top &&
+          y <= rect.bottom
+        ) {
+          return cat as Category;
         }
+      }
+    }
+    return null;
+  };
 
-        // Nếu không thả vào ô nào, chỉ cần reset trạng thái kéo
-        return prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i));
-      });
+  const handleDragEnd = (id: string, info: any) => {
+    const droppedCategory = getZoneAtPoint(info.point.x, info.point.y);
 
-      activeZoneRef.current = null;
-      setActiveZone(null);
-    },
-    [sendData],
-  );
+    setItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (!item) return prev;
 
-  const handleDrag = useCallback((point: { x: number; y: number }) => {
-    const zones = Object.entries(CATEGORY_SLUGS).map(([cat, slug]) => ({
-      cat: cat as Category,
-      rect: document.getElementById(`zone-${slug}`)?.getBoundingClientRect(),
-    }));
-    const found = zones.find(
-      (z) =>
-        z.rect &&
-        point.x >= z.rect.left &&
-        point.x <= z.rect.right &&
-        point.y >= z.rect.top &&
-        point.y <= z.rect.bottom,
-    );
+      if (droppedCategory) {
+        if (!item.isCorrect) {
+          setLives((l) => Math.max(0, l - 1));
+          setFeedbacks((f) => [
+            ...f,
+            {
+              id: Math.random().toString(),
+              type: "wrong",
+              x: info.point.x,
+              y: info.point.y,
+              message: "Kiến thức sai!",
+            },
+          ]);
+          return prev.filter((i) => i.id !== id);
+        } else if (droppedCategory === item.category) {
+          // Đúng loại
+          const newScore = scoreRef.current + 10;
+          scoreRef.current = newScore;
+          setScore(newScore);
+          sendData(newScore, "Đang thi");
+          setFeedbacks((f) => [
+            ...f,
+            {
+              id: Math.random().toString(),
+              type: "correct",
+              x: info.point.x,
+              y: info.point.y,
+            },
+          ]);
+          return prev.filter((i) => i.id !== id);
+        } else {
+          // Sai loại
+          setLives((l) => Math.max(0, l - 1));
+          setFeedbacks((f) => [
+            ...f,
+            {
+              id: Math.random().toString(),
+              type: "wrong",
+              x: info.point.x,
+              y: info.point.y,
+              message: "Sai mục!",
+            },
+          ]);
+          return prev.map((i) =>
+            i.id === id ? { ...i, isDragging: false } : i,
+          );
+        }
+      }
+      return prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i));
+    });
 
-    const newZone = found ? found.cat : null;
-    activeZoneRef.current = newZone;
-    setActiveZone(newZone);
-  }, []);
+    setActiveZone(null);
+  };
+
+  const handleDrag = (point: { x: number; y: number }) => {
+    const zone = getZoneAtPoint(point.x, point.y);
+    setActiveZone(zone);
+  };
 
   return (
     <div className="relative w-full h-screen bg-slate-50 overflow-hidden select-none touch-none">
