@@ -511,12 +511,6 @@ export default function App() {
                   >
                     BẮT ĐẦU CHƠI
                   </button>
-                  <button
-                    onClick={() => (window.location.hash = "#/results")}
-                    className="px-6 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-slate-200 transition-all"
-                  >
-                    BẢNG VÀNG
-                  </button>
                 </div>
               </div>
             </motion.div>
