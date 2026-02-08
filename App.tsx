@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
@@ -10,6 +16,9 @@ import {
   Loader2,
   RotateCw,
   BookOpen,
+  Users,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   Category,
@@ -106,6 +115,26 @@ export default function App() {
     }
   }, [route]);
 
+  // Statistics Calculation
+  const stats = useMemo(() => {
+    const total = leaderboard.length;
+    if (total === 0)
+      return { total: 0, passing: 0, failing: 0, passRate: 0, failRate: 0 };
+
+    const passingCount = leaderboard.filter((p) => p.result === "Đạt").length;
+    const failingCount = leaderboard.filter(
+      (p) => p.result === "Chưa đạt",
+    ).length;
+
+    return {
+      total,
+      passing: passingCount,
+      failing: failingCount,
+      passRate: Math.round((passingCount / total) * 100),
+      failRate: Math.round((failingCount / total) * 100),
+    };
+  }, [leaderboard]);
+
   useEffect(() => {
     if (route === "#/results") {
       fetchDashboardData();
@@ -169,7 +198,7 @@ export default function App() {
   };
 
   const spawnItem = useCallback(() => {
-    if (deckRef.current.length === 0) return; // Không lặp lại câu hỏi
+    if (deckRef.current.length === 0) return;
 
     const template = deckRef.current.pop();
     if (!template) return;
@@ -201,15 +230,11 @@ export default function App() {
           .map((item) => {
             if (item.isDragging) return item;
             const nextX = item.x + item.speed;
-            if (nextX > 115) {
-              // Thẻ trôi qua không bị trừ điểm (quy tắc mới)
-              return null;
-            }
+            if (nextX > 115) return null;
             return { ...item, x: nextX };
           })
           .filter(Boolean) as ActiveItem[];
 
-        // Nếu hết thẻ trong bộ bài và không còn thẻ trên màn hình -> Kết thúc
         if (
           deckRef.current.length === 0 &&
           updated.length === 0 &&
@@ -290,7 +315,6 @@ export default function App() {
       if (!item) return prev;
 
       if (droppedCategory) {
-        // Quy tắc: Nếu nội dung sai, kéo vào bất cứ ô nào cũng trừ mạng
         if (!item.isCorrect) {
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
@@ -304,9 +328,7 @@ export default function App() {
             },
           ]);
           return prev.filter((i) => i.id !== id);
-        }
-        // Nếu nội dung đúng, kéo vào đúng ô mới được cộng điểm
-        else if (droppedCategory === item.category) {
+        } else if (droppedCategory === item.category) {
           const newScore = Math.min(MAX_SCORE, scoreRef.current + 10);
           scoreRef.current = newScore;
           setScore(newScore);
@@ -325,9 +347,7 @@ export default function App() {
             setTimeout(() => finishGame(MAX_SCORE), 800);
           }
           return prev.filter((i) => i.id !== id);
-        }
-        // Nếu nội dung đúng nhưng kéo sai ô
-        else {
+        } else {
           setLives((l) => Math.max(0, l - 1));
           setFeedbacks((f) => [
             ...f,
@@ -339,7 +359,7 @@ export default function App() {
               message: "Sai mục!",
             },
           ]);
-          return prev.filter((i) => i.id !== id); // Đã kéo vào ô thì biến mất luôn dù đúng hay sai
+          return prev.filter((i) => i.id !== id);
         }
       }
       return prev.map((i) => (i.id === id ? { ...i, isDragging: false } : i));
@@ -355,7 +375,6 @@ export default function App() {
 
   return (
     <div className="relative w-full h-[100svh] bg-slate-50 overflow-hidden select-none touch-none">
-      {/* Portrait Warning */}
       <AnimatePresence>
         {isPortrait && (
           <motion.div
@@ -378,7 +397,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Adjusted HUD: Score, Lives & Timer - Lowered further for iPhone Safe Areas */}
       <AnimatePresence>
         {gameState === "PLAYING" && !isPortrait && (
           <motion.div
@@ -569,11 +587,12 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Results Page with Statistics */}
       {route === "#/results" && (
         <div className="absolute inset-0 z-[60] bg-[#020617] text-white p-4 md:px-12 overflow-y-auto">
-          <header className="flex justify-between items-center mb-6 max-w-4xl mx-auto sticky top-0 bg-[#020617]/90 backdrop-blur py-2 z-10">
-            <h1 className="text-xl font-black flex items-center gap-3">
-              <Trophy className="text-amber-400 w-5 h-5" /> BẢNG VÀNG
+          <header className="flex justify-between items-center mb-6 max-w-5xl mx-auto sticky top-0 bg-[#020617]/90 backdrop-blur py-4 z-10">
+            <h1 className="text-xl md:text-2xl font-black flex items-center gap-3">
+              <Trophy className="text-amber-400 w-6 h-6" /> BẢNG VÀNG
             </h1>
             <div className="flex gap-2">
               <button
@@ -581,7 +600,7 @@ export default function App() {
                 className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 text-xs"
               >
                 {" "}
-                <ArrowLeft size={14} />{" "}
+                <ArrowLeft size={16} /> QUAY LẠI{" "}
               </button>
               <button
                 onClick={() => fetchDashboardData()}
@@ -589,44 +608,111 @@ export default function App() {
                 className={`p-2 bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all ${isLoadingResults ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 {isLoadingResults ? (
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={18} className="animate-spin" />
                 ) : (
-                  <RefreshCw size={16} />
+                  <RefreshCw size={18} />
                 )}
               </button>
             </div>
           </header>
 
-          <div className="max-w-4xl mx-auto space-y-2 pb-10">
-            {leaderboard.map((p, i) => (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                key={i}
-                className="bg-white/5 p-3 rounded-2xl flex justify-between items-center border border-white/5"
-              >
-                <div className="flex items-center gap-4">
-                  <span
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${i === 0 ? "bg-amber-400 text-slate-900" : i === 1 ? "bg-slate-300 text-slate-900" : "bg-slate-800 text-slate-400"}`}
-                  >
-                    {i + 1}
-                  </span>
-                  <h3 className="text-sm font-bold text-slate-200 truncate max-w-[140px] md:max-w-md">
-                    {p.name}
-                  </h3>
+          <div className="max-w-5xl mx-auto mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                  <Users size={24} />
                 </div>
-                <div className="flex items-center gap-6">
-                  <p className="text-lg font-black text-indigo-400 tabular-nums">
-                    {p.score}
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-tight">
+                    Tổng tham gia
                   </p>
-                  <p
-                    className={`hidden sm:block text-[8px] font-black px-2 py-0.5 rounded-full ${p.result === "Đạt" ? "text-green-500 bg-green-500/10" : "text-slate-400 bg-white/5"}`}
-                  >
-                    {p.result}
+                  <p className="text-2xl font-black text-white tabular-nums">
+                    {stats.total}
                   </p>
                 </div>
-              </motion.div>
-            ))}
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-400">
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-tight">
+                    Tỷ lệ đạt
+                  </p>
+                  <p className="text-2xl font-black text-white tabular-nums">
+                    {stats.passRate}%{" "}
+                    <span className="text-[10px] font-bold text-slate-500 ml-1">
+                      ({stats.passing})
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-400">
+                  <XCircle size={24} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-tight">
+                    Tỷ lệ chưa đạt
+                  </p>
+                  <p className="text-2xl font-black text-white tabular-nums">
+                    {stats.failRate}%{" "}
+                    <span className="text-[10px] font-bold text-slate-500 ml-1">
+                      ({stats.failing})
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-5xl mx-auto space-y-2 pb-10">
+            {leaderboard.length === 0 && !isLoadingResults ? (
+              <div className="text-center py-20 bg-white/5 rounded-[40px] border border-white/5">
+                <Trophy size={48} className="mx-auto mb-4 text-slate-700" />
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+                  Chưa có kết quả nào được ghi nhận.
+                </p>
+              </div>
+            ) : (
+              leaderboard.map((p, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  key={i}
+                  className="bg-white/5 p-4 rounded-3xl flex justify-between items-center border border-white/5 group hover:bg-white/[0.08] transition-all"
+                >
+                  <div className="flex items-center gap-5">
+                    <span
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${i === 0 ? "bg-amber-400 text-slate-900" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-orange-400 text-slate-900" : "bg-slate-800 text-slate-400"}`}
+                    >
+                      {i + 1}
+                    </span>
+                    <div>
+                      <h3 className="text-base font-black text-slate-200 group-hover:text-white transition-colors truncate max-w-[160px] md:max-w-md">
+                        {p.name}
+                      </h3>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                        {p.timestamp}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-8">
+                    <div className="text-right">
+                      <p className="text-2xl font-black text-indigo-400 tabular-nums leading-none">
+                        {p.score}
+                      </p>
+                      <p
+                        className={`text-[8px] font-black px-2 py-0.5 rounded-full mt-2 inline-block ${p.result === "Đạt" ? "text-green-500 bg-green-500/10" : p.result === "Đang thi" ? "text-amber-500 bg-amber-500/10 animate-pulse" : "text-slate-400 bg-white/5"}`}
+                      >
+                        {p.result}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))
+            )}
           </div>
         </div>
       )}
