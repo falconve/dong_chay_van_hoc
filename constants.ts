@@ -32,7 +32,7 @@ export const DEFAULT_RAW_DATA = [
     isCorrect: true,
   },
   {
-    text: "Từ ngữ và câu văn giàu hình ảnh, hầm súc, có tính gợi mở.",
+    text: "Từ ngữ và câu văn giàu hình ảnh, hàm súc, có tính gợi mở.",
     category: Category.ART,
     isCorrect: true,
   },
@@ -54,44 +54,29 @@ export const DEFAULT_RAW_DATA = [
 
   // BÀI HỌC
   {
-    text: "Luận đề rõ ràng, ngắn gọn, dễ hiểu.",
+    text: "Luận đề cần rõ ràng, ngắn gọn, dễ hiểu.",
     category: Category.LESSON,
     isCorrect: true,
   },
   {
-    text: "Luận điểm sắp xếp hợp lí, làm sáng rõ luận đề.",
+    text: "Luận điểm cần được sắp xếp hợp lí, làm sáng rõ luận đề.",
     category: Category.LESSON,
     isCorrect: true,
   },
   {
-    text: "Lí lẽ và bằng chứng thuyết phục, được triển khai theo trình tự hợp lí, có liên quan và cùng làm sáng tỏ luận điểm.",
+    text: "Lí lẽ và bằng chứng phải giàu sức thuyết phục, được triển khai theo trình tự hợp lí, có liên quan và cùng làm sáng tỏ luận điểm.",
     category: Category.LESSON,
     isCorrect: true,
   },
   {
-    text: "Lí lẽ góp phần thể hiện giọng điệu.",
+    text: "Lí lẽ phải góp phần thể hiện giọng điệu.",
     category: Category.LESSON,
     isCorrect: true,
   },
   {
-    text: "Lí lẽ thiên về bộc lộ thái độ, tình cảm của tác giả.",
-    category: Category.LESSON,
-    isCorrect: false,
-  },
-  {
-    text: "Sử dụng các yếu tố tự sự, miêu tả, biểu cảm, các biện pháp tu từ làm tăng hiệu quả biểu đạt của văn bản.",
+    text: "Các yếu tố tự sự, miêu tả, biểu cảm, các biện pháp tu từ được sử dụng phù hợp làm tăng hiệu quả biểu đạt của văn bản.",
     category: Category.LESSON,
     isCorrect: true,
-  },
-  {
-    text: "Sử dụng yếu tố nghị luận chủ yếu, không sử dụng các yếu tố miêu tả, biểu cảm.",
-    category: Category.LESSON,
-    isCorrect: false,
-  },
-  {
-    text: "Sử dụng chủ yếu yếu tố thuyết minh tăng tính thuyết phục cho văn bản.",
-    category: Category.LESSON,
-    isCorrect: false,
   },
 ];
 
