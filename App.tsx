@@ -39,7 +39,7 @@ const GOOGLE_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwzjxKgbB_wouQS2Ak4jJg3x2HeRNs0I3UzVH1W6PCfkw_-Tbl7ljpEQ3kY7iN9sO5_/exec";
 const BACKGROUND_MUSIC_URL =
   "https://mrfalcon.top/mp3_game/Nha%CC%A3c%20gio%CC%9B%CC%81i%20thie%CC%A3%CC%82u%20%C4%91a%CC%A3i%20bie%CC%82%CC%89u%201.mp3"; // Nhạc thắng cuộc/vinh danh
-const GAME_DURATION_SEC = 180;
+const GAME_DURATION_SEC = 120;
 const PASSING_SCORE = 80;
 const MAX_SCORE = 100;
 
